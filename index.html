@@ -1260,6 +1260,7 @@ function renderLoginScreen(){
         <img src="${LOGO_ICON_DATA}" alt="logo" class="login-logo">
         <h2>${T('brand')}</h2>
         <p class="login-sub">${T('loginSub')}</p>
+        ${loginDriveBox()}
         <div class="form-row"><label>${T('username')}</label><input id="login_username" autocomplete="username"></div>
         <div class="form-row"><label>${T('password')}</label><input id="login_password" type="password" autocomplete="current-password"></div>
         <p id="loginError" class="login-error"></p>
@@ -3534,6 +3535,11 @@ async function connectGoogleDrive(){
   const ok = await acquireDriveToken(false);
   if(!ok){ alert(TT('تعذر تسجيل الدخول إلى Google Drive.','Could not sign in to Google Drive.')); return; }
   if(wasIntent){ await reconnectDrive(); return; }
+  // First connection of this device: whatever was created locally before (default branches, test entries)
+  // is thrown away so it never gets merged into the shared data on Drive.
+  sync.dirty.clear(); sync.shadows = {}; sync.versions = {};
+  await idbClear();
+  if(authRole){ authRole = null; state.authBranchId = null; sync.session = null; try{ await storageSet('session','{}',false); }catch(e){} }
   state.ready = false; render();
   await loadAll();
 }
@@ -5644,6 +5650,15 @@ function vocActionButtons(r){
   return `${st!=='approved'?`<button class="btn btn-sm btn-primary" onclick="setVocStatus('${r.id}','approved')">${icon('check')} ${TT('موافقة VOC','Approve VOC')}</button>`:''}${st==='pending'?`<button class="btn btn-sm" onclick="setVocStatus('${r.id}','rejected')">${TT('رفض VOC','Reject VOC')}</button>`:''}`;
 }
 function pendingVocCount(){ return visibleRepairs().filter(r=>isVoc(r) && (r.vocStatus||'pending')==='pending' && !isClosedStatus(r.status)).length; }
+
+/* ---------- login screen Drive box ---------- */
+function loginDriveBox(){
+  if(!driveConfigured()) return '';
+  const mode = backendMode();
+  if(mode==='drive') return `<div class="info-box good" style="margin:0 0 14px;text-align:center;">✓ ${TT('الجهاز مربوط بـ Google Drive','This device is connected to Google Drive')}</div>`;
+  if(mode==='offline') return `<div class="info-box bad" style="margin:0 0 14px;text-align:center;">${TT('انقطع الاتصال بـ Google Drive. أعد الاتصال قبل تسجيل الدخول.','Disconnected from Google Drive. Reconnect before logging in.')}<br><button class="btn btn-sm btn-primary" style="margin-top:8px;" onclick="reconnectDrive()">${TT('إعادة الاتصال بـ Google Drive','Reconnect Google Drive')}</button></div>`;
+  return `<div class="info-box warn" style="margin:0 0 14px;text-align:center;line-height:1.8;">${TT('هذا الجهاز بعده غير مربوط بـ Google Drive. حسابات الفروع محفوظة على Drive، فاربط الجهاز أولاً وبعدين سجل دخول.','This device is not connected to Google Drive yet. Branch accounts are stored on Drive, so connect first and then log in.')}<br><button class="btn btn-sm btn-primary" style="margin-top:8px;" onclick="connectGoogleDrive()">${TT('ربط Google Drive أولاً','Connect Google Drive first')}</button></div>`;
+}
 
 /* =====================================================================
    v1.9 — Fixed choice lists: Doogee models, fault types, part types.
