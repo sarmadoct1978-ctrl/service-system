@@ -5716,7 +5716,11 @@ function listsMigrate(){
   for(const p of state.inventory){
     if(p.defective) continue;
     if(p.partType===undefined){ p.partType = inferPartType(p.name); res.inventory = true; }
-    if(p.model===undefined){ p.model = inferPartModel(p.brand, p.name); res.inventory = true; }
+    if(!p.model){
+      const sp = splitBrandModel(p.brand, '');
+      if(sp.model && BRAND_ALIASES[sp.key]){ p.brand = brandDisplayName(sp.key); p.model = sp.model; res.inventory = true; }
+      else if(p.model===undefined){ p.model = inferPartModel(p.brand, p.name); res.inventory = true; }
+    }
   }
   return res;
 }
@@ -5782,12 +5786,25 @@ function normBrand(b){
   for(const [k, list] of Object.entries(BRAND_ALIASES)) if(list.some(a=>x===a.toLowerCase())) return k;
   return x;
 }
+// "Oukitel C62" typed into the brand field -> { key:'oukitel', model:'C62' }
+function splitBrandModel(brand, model){
+  const raw = latinDigits(brand).trim().replace(/\s+/g,' ');
+  const low = raw.toLowerCase();
+  for(const [k, list] of Object.entries(BRAND_ALIASES)){
+    for(const a of [...list].sort((x,y)=>y.length-x.length)){
+      const al = a.toLowerCase();
+      if(low===al || low.startsWith(al+' ')) return { key:k, model: model || raw.slice(al.length).trim() };
+    }
+  }
+  return { key: normBrand(brand), model: model||'' };
+}
+function brandDisplayName(key){ const known = catalogBrands().find(b=>normBrand(b)===key); return known || (key ? key.charAt(0).toUpperCase()+key.slice(1) : ''); }
 function normModel(m, brand){
   let x = latinDigits(m).toLowerCase().trim().replace(/\s+/g,' ');
   const key = normBrand(brand);
   const names = (BRAND_ALIASES[key] || [String(brand||'').toLowerCase().trim()]).filter(Boolean).map(a=>a.toLowerCase()).sort((a,b)=>b.length-a.length);
   for(const n of names){ if(x.startsWith(n)){ x = x.slice(n.length); break; } }
-  x = x.replace(/^سي\s*/, 'c').replace(/^نوت\s*/, 'note').replace(/برو/g,'pro').replace(/بلس/g,'plus');
+  x = x.replace(/\+/g,'plus').replace(/^سي\s*/, 'c').replace(/^نوت\s*/, 'note').replace(/برو/g,'pro').replace(/بلس/g,'plus');
   return x.replace(/[\s\-_.\/]+/g,'');
 }
 function partTypeOf(p){ return p.partType || inferPartType(p.name) || ''; }
@@ -5795,9 +5812,10 @@ function partTypeOf(p){ return p.partType || inferPartType(p.name) || ''; }
 function partFit(p, type, brand, model){
   if(p.defective) return '';
   if(type && partTypeOf(p)!==type) return '';
-  const b = normBrand(brand), pb = normBrand(p.brand);
+  const job = splitBrandModel(brand, model), part = splitBrandModel(p.brand, p.model);
+  const b = job.key, pb = part.key;
   if(b && pb && pb!==b) return '';
-  const m = normModel(model, brand), pm = normModel(p.model, p.brand||brand);
+  const m = normModel(job.model, brand), pm = normModel(part.model, p.brand||brand);
   if(m && pm && pm!==m) return '';
   return (m && pm===m) ? 'exact' : 'general';
 }
@@ -5828,7 +5846,7 @@ function partPickDiagnosis(branchId, type, brand, model){
   if(!here.length){
     const sameBranch = state.inventory.filter(p=>p.branchId===branchId && !p.defective && (Number(p.qty)||0)>0);
     const otherModel = sameBranch.filter(p=>(!type || partTypeOf(p)===type) && !partFit(p, type, brand, model));
-    if(otherModel.length) msgs.push(TT(`بالفرع ${otherModel.length} قطعة من هذا النوع بس مسجلة لبراند أو موديل ثاني (مثل: ${otherModel.slice(0,2).map(p=>p.model||p.name).join('، ')}). صحح موديل القطعة أو موديل الجهاز.`, `This branch has ${otherModel.length} part(s) of this type registered for another brand/model (e.g. ${otherModel.slice(0,2).map(p=>p.model||p.name).join(', ')}). Fix the part's model or the device model.`));
+    if(otherModel.length) msgs.push(TT(`بالفرع ${otherModel.length} قطعة من هذا النوع بس مسجلة لبراند أو موديل ثاني (مثل: ${otherModel.slice(0,2).map(p=>[p.brand,p.model].filter(Boolean).join(' ')||p.name).join('، ')}). صحح موديل القطعة أو موديل الجهاز.`, `This branch has ${otherModel.length} part(s) of this type registered for another brand/model (e.g. ${otherModel.slice(0,2).map(p=>[p.brand,p.model].filter(Boolean).join(' ')||p.name).join(', ')}). Fix the part's model or the device model.`));
     const noType = type ? sameBranch.filter(p=>!partTypeOf(p) && partFit(p, '', brand, model)) : [];
     if(noType.length) msgs.push(TT(`بالفرع ${noType.length} قطعة بدون «نوع قطعة» محدد. اختر «كل أنواع القطع» أو حدد نوعها من صفحة المخزن.`, `This branch has ${noType.length} part(s) with no part type. Choose "All part types" or set their type in Inventory.`));
   }
