@@ -5762,21 +5762,78 @@ function partPickerHtml(){
     </div>
     <div id="partPickHint" style="font-size:11.5px;color:var(--muted);margin-top:4px;"></div>`;
 }
+// Brand and model names are compared loosely so Arabic and English spellings match:
+// "اوكيتيل" = "Oukitel", "٦٢" = "62", and case, spaces, dashes and a leading brand name are ignored.
+const BRAND_ALIASES = {
+  oukitel:['oukitel','اوكيتيل','أوكيتيل','اوكتيل','أوكتيل','اوكيتل','اوكيتال'],
+  doogee:['doogee','دوجي','دوكي','دووجي'],
+  samsung:['samsung','سامسونج','سامسونگ','سامسونك'],
+  xiaomi:['xiaomi','شاومي','شياومي','redmi','ريدمي'],
+  infinix:['infinix','انفنكس','انفينكس','إنفينكس'],
+  tecno:['tecno','تكنو','تيكنو'],
+  zte:['zte','زد تي اي'],
+  apple:['apple','iphone','ايفون','آيفون','ابل'],
+  huawei:['huawei','هواوي'], honor:['honor','هونر','هونور'], nokia:['nokia','نوكيا'], realme:['realme','ريلمي'], oppo:['oppo','اوبو'], vivo:['vivo','فيفو'],
+};
+function latinDigits(x){ return String(x||'').replace(/[٠-٩]/g, d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[۰-۹]/g, d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d)); }
+function normBrand(b){
+  const x = latinDigits(b).toLowerCase().trim().replace(/\s+/g,' ');
+  if(!x) return '';
+  for(const [k, list] of Object.entries(BRAND_ALIASES)) if(list.some(a=>x===a.toLowerCase())) return k;
+  return x;
+}
+function normModel(m, brand){
+  let x = latinDigits(m).toLowerCase().trim().replace(/\s+/g,' ');
+  const key = normBrand(brand);
+  const names = (BRAND_ALIASES[key] || [String(brand||'').toLowerCase().trim()]).filter(Boolean).map(a=>a.toLowerCase()).sort((a,b)=>b.length-a.length);
+  for(const n of names){ if(x.startsWith(n)){ x = x.slice(n.length); break; } }
+  x = x.replace(/^سي\s*/, 'c').replace(/^نوت\s*/, 'note').replace(/برو/g,'pro').replace(/بلس/g,'plus');
+  return x.replace(/[\s\-_.\/]+/g,'');
+}
+function partTypeOf(p){ return p.partType || inferPartType(p.name) || ''; }
+// does this stock row fit the job? returns 'exact' | 'general' | '' (no)
+function partFit(p, type, brand, model){
+  if(p.defective) return '';
+  if(type && partTypeOf(p)!==type) return '';
+  const b = normBrand(brand), pb = normBrand(p.brand);
+  if(b && pb && pb!==b) return '';
+  const m = normModel(model, brand), pm = normModel(p.model, p.brand||brand);
+  if(m && pm && pm!==m) return '';
+  return (m && pm===m) ? 'exact' : 'general';
+}
 function partOptionsHtml(branchId, type, brand, model){
-  const all = state.inventory.filter(p=>p.branchId===branchId && !p.defective && (!type || p.partType===type));
-  const b = String(brand||'').toLowerCase(), m = String(model||'').toLowerCase();
   const exact = [], general = [];
-  for(const p of all){
-    const pb = String(p.brand||'').toLowerCase(), pm = String(p.model||'').toLowerCase();
-    if(b && pb && pb!==b) continue;           // another brand's part
-    if(m && pm && pm!==m) continue;           // another model's part
-    if(m && pm===m) exact.push(p); else general.push(p);
+  for(const p of state.inventory){
+    if(p.branchId!==branchId) continue;
+    const f = partFit(p, type, brand, model);
+    if(f==='exact') exact.push(p); else if(f==='general') general.push(p);
   }
   const opt = p=>`<option value="${p.id}" ${(Number(p.qty)||0)<=0?'disabled':''}>${p.name}${p.model?'':' ('+TT('عام','generic')+')'} — ${T('available')}: ${p.qty}${p.code?' · '+p.code:''}</option>`;
   let html = '';
   if(exact.length) html += `<optgroup label="${TT('مطابقة للجهاز','Matches this device')}: ${[brand,model].filter(Boolean).join(' ')}">${exact.map(opt).join('')}</optgroup>`;
   if(general.length) html += `<optgroup label="${exact.length?TT('قطع عامة / بدون موديل محدد','Generic parts / no model set'):TT('القطع المتوفرة','Available parts')}">${general.map(opt).join('')}</optgroup>`;
   return html;
+}
+// explains why the list is empty, so the user knows what to fix
+function partPickDiagnosis(branchId, type, brand, model){
+  const msgs = [];
+  const fitting = state.inventory.filter(p=>partFit(p, type, brand, model));
+  const here = fitting.filter(p=>p.branchId===branchId);
+  if(here.length && here.every(p=>(Number(p.qty)||0)<=0)) msgs.push(TT('القطعة موجودة بمخزن الفرع بس الكمية صفر.','The part exists in this branch but its quantity is 0.'));
+  const elsewhere = fitting.filter(p=>p.branchId!==branchId && (Number(p.qty)||0)>0);
+  if(elsewhere.length){
+    const where = [...new Set(elsewhere.map(p=>p.branchId===MAIN_WH_ID ? T('mainWarehouse') : branchName(p.branchId)))].join('، ');
+    msgs.push(TT(`القطعة متوفرة في: ${where}. لازم تتحول لمخزن هذا الفرع أولاً (صفحة المخزن ← تحويل) حتى تطلع بالقائمة.`, `The part is in stock at: ${where}. Transfer it to this branch first (Inventory → Transfer) so it appears here.`));
+  }
+  if(!here.length){
+    const sameBranch = state.inventory.filter(p=>p.branchId===branchId && !p.defective && (Number(p.qty)||0)>0);
+    const otherModel = sameBranch.filter(p=>(!type || partTypeOf(p)===type) && !partFit(p, type, brand, model));
+    if(otherModel.length) msgs.push(TT(`بالفرع ${otherModel.length} قطعة من هذا النوع بس مسجلة لبراند أو موديل ثاني (مثل: ${otherModel.slice(0,2).map(p=>p.model||p.name).join('، ')}). صحح موديل القطعة أو موديل الجهاز.`, `This branch has ${otherModel.length} part(s) of this type registered for another brand/model (e.g. ${otherModel.slice(0,2).map(p=>p.model||p.name).join(', ')}). Fix the part's model or the device model.`));
+    const noType = type ? sameBranch.filter(p=>!partTypeOf(p) && partFit(p, '', brand, model)) : [];
+    if(noType.length) msgs.push(TT(`بالفرع ${noType.length} قطعة بدون «نوع قطعة» محدد. اختر «كل أنواع القطع» أو حدد نوعها من صفحة المخزن.`, `This branch has ${noType.length} part(s) with no part type. Choose "All part types" or set their type in Inventory.`));
+  }
+  if(!msgs.length) msgs.push(authRole==='branch' ? TT('اطلبها من المخزن الرئيسي بزر «طلب قطعة».','Request it from the main warehouse with "Request part".') : TT('أضف القطعة للمخزن أولاً.','Add the part to stock first.'));
+  return msgs.join('<br>');
 }
 function refreshPartSelect(){
   const ps = document.getElementById('partSelect'); if(!ps) return;
@@ -5786,7 +5843,7 @@ function refreshPartSelect(){
   ps.innerHTML = partOptionsHtml(modalCtx.branchId, type, brand, model);
   const hint = document.getElementById('partPickHint');
   const any = !!ps.querySelector('option:not([disabled])');
-  if(hint) hint.innerHTML = any ? '' : `<span style="color:var(--red);">${TT('ما في قطعة مطابقة متوفرة بمخزن الفرع لهذا الجهاز','No matching part in this branch for this device')}${type?' ('+type+')':''}. ${authRole==='branch'?TT('اطلبها من المخزن الرئيسي بزر «طلب قطعة».','Request it from the main warehouse with "Request part".'):''}</span>`;
+  if(hint) hint.innerHTML = any ? '' : `<span style="color:var(--red);">${TT('ما في قطعة مطابقة متوفرة بمخزن الفرع لهذا الجهاز','No matching part in this branch for this device')}${type?' ('+type+')':''}.</span><br><span style="color:var(--text);">${partPickDiagnosis(modalCtx.branchId, type, brand, model)}</span>`;
 }
 
 /* ---------- part form (admin / warehouse): brand, model and type from lists ---------- */
