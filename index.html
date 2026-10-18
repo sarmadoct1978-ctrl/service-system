@@ -5395,9 +5395,35 @@ function claimRows(){
   return visibleRepairs().filter(r=>!isOutWarranty(r) && [ST.DONE, ST.READY, ST.DELIV].includes(r.status)).map(r=>{
     const ded = jobDeducted(r);
     const lines = Object.entries(ded).filter(([,q])=>q>0).map(([invId,q])=>{ const it = state.inventory.find(x=>x.id===invId); return {name: it?it.name:invId, qty:q, cost: it?(Number(it.costPrice)||0):0}; });
-    const value = lines.reduce((s,l)=>s+l.qty*l.cost,0);
-    return {r, lines, value};
-  }).filter(x=>x.lines.length || isSwapRepair(x.r));
+    const partsValue = lines.reduce((s,l)=>s+l.qty*l.cost,0);
+    const kind = isSwapRepair(r) ? 'swap' : (lines.length ? 'part' : (r.repairType==='software' ? 'software' : ''));
+    const custom = r.claimLabor!==undefined && r.claimLabor!==null && r.claimLabor!=='';
+    const labor = custom ? (Number(r.claimLabor)||0) : claimFee(kind);
+    // SWAP: the replacement device comes from the company, so only the service fee is claimed
+    const value = (kind==='swap' ? 0 : partsValue) + labor;
+    return {r, lines, partsValue, labor, custom, value, kind};
+  }).filter(x=>x.kind);
+}
+// default service fee claimed per job type, set once by the admin (synced in serviceLists)
+function claimFee(kind){ const f = (serviceLists && serviceLists.claimFees) || {}; return Number(f[kind])||0; }
+function setClaimFee(kind, val){
+  if(authRole!=='admin') return;
+  ensureServiceLists();
+  serviceLists.claimFees = { ...(serviceLists.claimFees||{}), [kind]: Math.max(0, Number(val)||0) };
+  queueSave('serviceLists');
+  logAudit('warranty_claim', authRole, currentActorName(), `${TT('أجور الخدمة الافتراضية','Default service fee')} ${claimKindLabel(kind)}: ${money(serviceLists.claimFees[kind])}`);
+  render();
+}
+const CLAIM_KIND = { part:['تبديل قطعة','Part'], software:['سوفتوير','Software'], swap:['SWAP','SWAP'] };
+function claimKindLabel(k){ return (CLAIM_KIND[k]||['',''])[lang==='ar'?0:1]; }
+function setClaimLabor(id, val){
+  if(authRole!=='admin') return;
+  const r = state.repairs.find(x=>x.id===id); if(!r) return;
+  const v = Math.max(0, Number(val)||0);
+  r.claimLabor = v;
+  saveRepairs();
+  logAudit('warranty_claim', authRole, currentActorName(), `${r.jobNo||''}: ${TT('أجور المطالبة','Claim labour')} ${money(v)}`);
+  render();
 }
 function renderClaims(){
   let rows = claimRows();
@@ -5412,6 +5438,13 @@ function renderClaims(){
       <div class="kpi tint-blue"><div class="kpi-top"><p class="kpi-label">${TT('تمت المطالبة','Claimed')}</p><div class="kpi-icon blue">${icon('receipt')}</div></div><p class="kpi-value">${money(sumBy('claimed'))}</p></div>
       <div class="kpi tint-green"><div class="kpi-top"><p class="kpi-label">${TT('تم التعويض','Reimbursed')}</p><div class="kpi-icon green">${icon('check')}</div></div><p class="kpi-value">${money(sumBy('paid'))}</p></div>
     </div>
+    ${authRole==='admin'?`<div class="panel" style="padding:12px 14px;margin-bottom:12px;">
+      <div style="font-weight:600;margin-bottom:8px;">${TT('أجور الخدمة (Service fees) الافتراضية لكل جوب','Default service fee per job')}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;">
+        ${['part','software','swap'].map(k=>`<label style="display:flex;align-items:center;gap:6px;margin:0;">${claimKindLabel(k)} <input type="number" min="0" value="${claimFee(k)}" style="width:110px;" onchange="setClaimFee('${k}', this.value)"></label>`).join('')}
+      </div>
+      <div style="font-size:11.5px;color:var(--muted);margin-top:6px;">${TT('تنطبق على كل جوب ما معدّل أجوره يدوياً. بالـ SWAP الجهاز البديل من الشركة، فتنحسب أجور الخدمة بس.','Applies to every job without a manual fee. For SWAP the replacement comes from the company, so only the service fee counts.')}</div>
+    </div>`:''}
     <div class="toolbar">
       <select id="claimBrand"><option value="">${T('allBrands')}</option>${brands.map(b=>`<option value="${b}" ${claimBrand===b?'selected':''}>${b}</option>`).join('')}</select>
       <select id="claimFilter">
@@ -5422,18 +5455,20 @@ function renderClaims(){
       <div style="flex:1;"></div>
       <button class="btn btn-primary" onclick="exportClaimsExcel()">${icon('receipt')} ${T('exportExcel')}</button>
     </div>
-    <p style="font-size:12px;color:var(--muted);margin:-6px 0 12px;">${TT('الجوبات داخل الضمان اللي صرفت قطع أو انستبدلت، بسعر الشراء. سجّل حالة المطالبة من الشركة أو الموزع لكل جوب.','In-warranty jobs that used parts or were swapped, valued at purchase price. Record the claim status with the brand/distributor for each job.')}</p>
+    <p style="font-size:12px;color:var(--muted);margin:-6px 0 12px;">${TT('كل الجوبات داخل الضمان اللي خلصت: تبديل قطعة (القطع بسعر الشراء + أجور الخدمة)، سوفتوير (أجور الخدمة)، SWAP (أجور الخدمة بس، الجهاز من الشركة). سجّل حالة المطالبة لكل جوب.','All completed in-warranty jobs: part replacement (parts at cost + service fee), software (service fee), SWAP (service fee only, device from the company). Record the claim status for each job.')}</p>
     <div class="panel">
       ${rows.length?`<table>
-        <thead><tr><th>${T('jobCardNo')}</th><th>${T('colBranch')}</th><th>${T('colDevice')}</th><th>IMEI</th><th>${TT('القطع / الجهاز البديل','Parts / replacement')}</th><th>${TT('القيمة','Value')}</th><th>${TT('المطالبة','Claim')}</th></tr></thead>
+        <thead><tr><th>${T('jobCardNo')}</th><th>${T('colBranch')}</th><th>${T('colDevice')}</th><th>IMEI</th><th>${TT('النوع','Type')}</th><th>${TT('القطع / الجهاز البديل','Parts / replacement')}</th><th>${TT('أجور اليد','Labour')}</th><th>${TT('القيمة','Value')}</th><th>${TT('المطالبة','Claim')}</th></tr></thead>
         <tbody>${rows.map(x=>`<tr>
           <td class="mono" style="font-size:12px;">${x.r.jobNo||'-'}<div style="font-size:11px;color:var(--muted);">${fmtDate(x.r.createdAt)}</div></td>
           <td>${branchName(x.r.branchId)}</td><td>${deviceLabel(x.r)}${isSwapRepair(x.r)?' <span class="status-badge badge-swap">SWAP</span>':''}</td>
           <td class="mono" style="font-size:12px;">${x.r.imei||'-'}${x.r.newImei?`<div>→ ${x.r.newImei}</div>`:''}</td>
-          <td style="font-size:12.5px;">${x.lines.map(l=>`${l.name} ×${l.qty}`).join('، ')||'-'}</td>
+          <td><span class="status-badge ${x.kind==='swap'?'badge-swap':(x.kind==='software'?'badge-quote-pending':'badge-branch')}">${claimKindLabel(x.kind)}</span></td>
+          <td style="font-size:12.5px;">${x.lines.map(l=>`${l.name} ×${l.qty}`).join('، ')||(x.kind==='software'?TT('بدون قطع','No parts'):'-')}${x.kind==='swap'?`<div style="font-size:11px;color:var(--muted);">${TT('الجهاز البديل من الشركة — ما ينحسب','Replacement from the company — not counted')}</div>`:''}</td>
+          <td>${authRole==='admin'?`<input type="number" min="0" value="${x.labor}" style="width:90px;${x.custom?'':'color:var(--muted);'}" title="${x.custom?TT('معدّلة يدوياً','Set manually'):TT('الأجور الافتراضية','Default fee')}" onchange="setClaimLabor('${x.r.id}', this.value)">`:`<span class="mono">${money(x.labor)}</span>`}</td>
           <td class="mono">${money(x.value)}</td>
           <td>${authRole==='admin'?`<select onchange="setClaimStatus('${x.r.id}', this.value)">${Object.keys(CLAIM_LABELS).map(k=>`<option value="${k}" ${(x.r.claimStatus||'')===k?'selected':''}>${CLAIM_LABELS[k][lang==='ar'?0:1]}</option>`).join('')}</select>`:CLAIM_LABELS[x.r.claimStatus||''][lang==='ar'?0:1]}</td>
-        </tr>`).join('')}</tbody></table>`:emptyState(TT('ما في مطالبات','No claims'), TT('الجوبات داخل الضمان اللي صرفت قطع راح تظهر هنا.','In-warranty jobs that used parts will appear here.'))}
+        </tr>`).join('')}</tbody></table>`:emptyState(TT('ما في مطالبات','No claims'), TT('الجوبات داخل الضمان اللي خلصت (قطع، سوفتوير، SWAP) راح تظهر هنا.','Completed in-warranty jobs (parts, software, SWAP) will appear here.'))}
     </div>`;
 }
 function setClaimStatus(id, val){
@@ -5448,8 +5483,8 @@ function exportClaimsExcel(){
   if(typeof XLSX === 'undefined'){ alert(TT('تعذّر تحميل مكتبة التصدير، تحقق من الاتصال بالإنترنت.','Could not load the export library, check your internet connection.')); return; }
   const rows = claimRows();
   const ws = XLSX.utils.aoa_to_sheet([
-    [T('jobCardNo'), T('colBranch'), T('xlReceivedDate'), T('deviceBrand'), T('xlModel'), 'IMEI', T('newImeiLabel'), TT('القطع','Parts'), TT('القيمة','Value'), TT('المطالبة','Claim')],
-    ...rows.map(x=>[x.r.jobNo||'', branchName(x.r.branchId), fmtDate(x.r.createdAt), x.r.deviceBrand||'', x.r.deviceModel||'', String(x.r.imei||''), String(x.r.newImei||''), x.lines.map(l=>`${l.name} x${l.qty}`).join(', '), x.value, CLAIM_LABELS[x.r.claimStatus||''][lang==='ar'?0:1]])
+    [T('jobCardNo'), T('colBranch'), T('xlReceivedDate'), T('deviceBrand'), T('xlModel'), 'IMEI', T('newImeiLabel'), TT('النوع','Type'), TT('القطع','Parts'), TT('قيمة القطع (للـ SWAP ما تنحسب)','Parts value (not counted for SWAP)'), TT('أجور اليد','Labour'), TT('القيمة','Value'), TT('المطالبة','Claim')],
+    ...rows.map(x=>[x.r.jobNo||'', branchName(x.r.branchId), fmtDate(x.r.createdAt), x.r.deviceBrand||'', x.r.deviceModel||'', String(x.r.imei||''), String(x.r.newImei||''), claimKindLabel(x.kind), x.lines.map(l=>`${l.name} x${l.qty}`).join(', '), x.partsValue, x.labor, x.value, CLAIM_LABELS[x.r.claimStatus||''][lang==='ar'?0:1]])
   ]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, TT('مطالبات الضمان','Warranty claims'));
