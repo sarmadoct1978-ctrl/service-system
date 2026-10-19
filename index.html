@@ -4467,11 +4467,16 @@ function reactivateRepair(id){
 function deleteRepair(id){
   const r = state.repairs.find(x=>x.id===id);
   if(!r) return;
-  if(authRole==='branch' && r.branchId!==state.authBranchId){ alert(T('alertNoDeletePermission')); return; }
-  if(!confirm(T('confirmDeleteDevice'))) return;
-  applyJobStock(r, {deleted:true});
+  // only the admin deletes jobs
+  if(authRole!=='admin'){ alert(TT('مسح الجوبات للمدير بس. إذا الجوب انفتح بالغلط، كلّم المدير أو ألغِه.','Only the admin can delete jobs. If it was opened by mistake, ask the admin or cancel it.')); return; }
+  const delivered = r.status===ST.DELIV;
+  const msg = delivered
+    ? TT(`هذا الجهاز تسلّم للزبون.\nإذا تمسح الجوب، القطع المصروفة له ما ترجع للمخزن (لأنها منصوبة بجهاز الزبون).\n\nتمسح الجوب ${r.jobNo||''}؟`, `This device was delivered to the customer.\nDeleting the job will NOT return its parts to stock (they are installed in the customer's device).\n\nDelete job ${r.jobNo||''}?`)
+    : T('confirmDeleteDevice') + TT('\n(القطع المصروفة للجوب ترجع لمخزن الفرع)','\n(parts issued to the job go back to the branch stock)');
+  if(!confirm(msg)) return;
+  if(!delivered) applyJobStock(r, {deleted:true});
   state.repairs = state.repairs.filter(x=>x.id!==id);
-  logAudit('repair_delete', authRole, currentActorName(), `${T('auditDeviceDeleted')}: ${deviceLabel(r)} (${r.jobNo||r.id.slice(-6)}) — ${r.customerName}`);
+  logAudit('repair_delete', authRole, currentActorName(), `${T('auditDeviceDeleted')}: ${deviceLabel(r)} (${r.jobNo||r.id.slice(-6)}) — ${r.customerName}${delivered?TT(' — مسلّم، القطع ما رجعت للمخزن',' — delivered, parts not returned'):''}`);
   saveRepairs();
   render();
 }
@@ -4760,7 +4765,7 @@ function ticketCard(r, compact){
         <button class="btn btn-sm" onclick="printReceipt('${r.id}')">${icon('print')} ${T('printReceiptBtn')}</button>
         <button class="btn btn-sm" onclick="printInvoiceFromRepair('${r.id}')">${icon('print')} ${T('printInvoiceBtn')}</button>
         ${(r.estCost>0 && !r.invoiceId)?`<button class="btn btn-sm" onclick="makeInvoiceFromRepair('${r.id}')">${icon('receipt')} ${T('createInvoiceBtn')}</button>`:''}
-        ${canOperate?`<button class="btn btn-sm btn-danger" onclick="deleteRepair('${r.id}')">${icon('del')} ${T('delete')}</button>`:''}
+        ${authRole==='admin'?`<button class="btn btn-sm btn-danger" onclick="deleteRepair('${r.id}')">${icon('del')} ${T('delete')}</button>`:''}
       </div>`}
     </div>`;
 }
