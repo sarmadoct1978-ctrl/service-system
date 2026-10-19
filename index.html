@@ -501,18 +501,30 @@ details.hist table{margin-top:6px;}
 .tech-chip{display:inline-flex;align-items:center;gap:6px;}
 .chips{display:flex;flex-wrap:wrap;gap:6px;}
 .item-row input.price{min-width:110px;}
-.tickets{gap:8px !important;}
-.tickets .ticket{padding:10px 14px;gap:6px;}
-.tickets .ticket-device{font-size:14px;gap:6px;}
-.tickets .ticket-meta{font-size:12px;margin-top:2px;}
-.tickets .ticket-issue{padding:4px 10px;font-size:12.5px;}
-.tickets .ticket-price{font-size:14px;}
-.tickets .stepper-wrap .step-label{margin-top:3px;font-size:9px;}
-.tickets .step-dot{width:10px;height:10px;}
-.tickets .ticket-actions{gap:6px;}
-.tickets .ticket-actions .btn,.tickets .ticket .btn-sm{padding:4px 10px;font-size:12px;}
-.tickets details.hist{margin-top:0;font-size:12px;}
-.tickets .ticket .status-badge{padding:2px 8px;font-size:11px;}
+.tickets{gap:6px !important;}
+.tickets .ticket{padding:8px 12px;gap:4px;}
+.tickets .ticket-top{gap:8px;}
+.tickets .ticket-device{font-size:13.5px;gap:5px;}
+.tickets .ticket-meta{font-size:11.5px;margin-top:1px;line-height:1.5;}
+.tickets .ticket-issue{padding:3px 10px;font-size:12px;}
+.tickets .ticket-price{font-size:13px;}
+.tickets .stepper{margin-top:0;}
+.tickets .stepper-labels{display:none;}            /* the status badge already names the stage; hover a dot to see its name */
+.tickets .step-dot{width:9px;height:9px;}
+.tickets .step-dot.current{box-shadow:0 0 0 3px var(--violet-light);}
+.tickets .ticket-actions{gap:5px;}
+.tickets .ticket-actions .btn,.tickets .ticket .btn-sm{padding:3px 9px;font-size:11.5px;min-height:0;line-height:1.6;}
+.tickets details.hist{margin-top:0;font-size:11.5px;}
+.tickets .ticket-foot{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;}
+.tickets .ticket-foot .stepper-wrap{flex:0 0 170px;}
+.tickets .ticket-foot details.hist{flex:0 0 auto;}
+.tickets .ticket-foot details.hist[open]{flex-basis:100%;order:9;}
+.tickets .ticket-foot .ticket-actions{flex:1 1 auto;margin:0;}
+.tickets .ticket-top>div:first-child{min-width:0;}
+.tickets .ticket-issue{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tickets .ticket-issue:hover{white-space:normal;}
+.tickets details.hist:not([open]) summary{line-height:1.4;}
+.tickets .ticket .status-badge{padding:1px 7px;font-size:10.5px;}
 .ticket.st-1{background:#fff5f5;}
 .ticket.st-2,.ticket.st-3{background:#fffaf0;}
 .ticket.st-4{background:#fff5f5;}
@@ -4763,7 +4775,7 @@ function ticketCard(r, compact){
         ${STATUSES.map((s,idx)=>{
           const dotCls = idx<stIdx?'done':(idx===stIdx?'current':'');
           const lineCls = idx<stIdx?'done':'';
-          return `<div class="step"><div class="step-dot ${dotCls}"></div>${idx<STATUSES.length-1?`<div class="step-line ${lineCls}"></div>`:''}</div>`;
+          return `<div class="step" title="${DL(s)}"><div class="step-dot ${dotCls}"></div>${idx<STATUSES.length-1?`<div class="step-line ${lineCls}"></div>`:''}</div>`;
         }).join('')}
       </div>
       <div class="stepper-labels">${STATUSES.map(s=>`<div class="step-label">${DL(s)}</div>`).join('')}</div>
@@ -4793,9 +4805,10 @@ function ticketCard(r, compact){
       ${(!compact && (r.softwareOps||[]).length) ? `<div class="ticket-meta">${TT('السوفتوير:','Software:')} ${softwareOpsLabel(r.softwareOps)}</div>` : ''}
       ${(!compact && r.partsUsed && r.partsUsed.length) ? `<div class="ticket-meta">${T('partsUsedLabel')} ${r.partsUsed.map(p=>p.name+' ×'+p.qty).join('، ')}${DEDUCT_STAGES.includes(r.status)||isCancelled?'':` <span style="font-size:11px;">(${TT('محجوزة، تنصرف من المخزن عند بدء التصليح','reserved; taken from stock when repair starts')})</span>`}</div>` : ''}
       ${(!compact && linkedTr.length)?`<div class="ticket-meta">${TT('طلبات القطع:','Part requests:')} ${linkedTr.map(t=>`${t.name} ×${t.qty} ${transferStatusBadge(t)}`).join(' ')}</div>`:''}
-      ${(compact || isCancelled) ? '' : stepper}
-      ${compact ? '' : statusHistoryHtml(r)}
-      ${compact ? '' : `<div class="ticket-actions">
+      ${compact ? '' : `<div class="ticket-foot">
+      ${isCancelled ? '' : stepper}
+      ${statusHistoryHtml(r)}
+      <div class="ticket-actions">
         ${(!isCancelled && nextSt && canOperate)?`<button class="btn btn-sm" onclick="advanceStatus('${r.id}')">${icon('check')} ${TT('نقل إلى','Move to')}: ${DL(nextSt)}</button>`:''}
         ${vocActionButtons(r)}
         ${(canOperate && out && !isClosedStatus(r.status) && q!=='approved' && (r.estCost||0)>0)?`<button class="btn btn-sm btn-primary" onclick="setQuote('${r.id}','approved')">${icon('check')} ${TT('الزبون وافق','Customer approved')}</button>`:''}
@@ -4812,6 +4825,7 @@ function ticketCard(r, compact){
         <button class="btn btn-sm" onclick="printInvoiceFromRepair('${r.id}')">${icon('print')} ${T('printInvoiceBtn')}</button>
         ${(r.estCost>0 && !r.invoiceId)?`<button class="btn btn-sm" onclick="makeInvoiceFromRepair('${r.id}')">${icon('receipt')} ${T('createInvoiceBtn')}</button>`:''}
         ${authRole==='admin'?`<button class="btn btn-sm btn-danger" onclick="deleteRepair('${r.id}')">${icon('del')} ${T('delete')}</button>`:''}
+      </div>
       </div>`}
     </div>`;
 }
