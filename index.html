@@ -4997,6 +4997,9 @@ function addModalPart(){
   if(qty<=0) return;
   const inv = state.inventory.find(p=>p.id===invId);
   if(!inv) return;
+  // one piece of each part per job: no two screens, two boards, or the same part twice
+  const dup = duplicatePartError([...modalPartsUsed, {invId, name:inv.name, qty}]);
+  if(dup){ alert(dup); return; }
   const editing = modalCtx.id ? state.repairs.find(r=>r.id===modalCtx.id) : null;
   const already = editing ? (jobDeducted(editing)[invId]||0) : 0;
   const existing = modalPartsUsed.find(p=>p.invId===invId);
@@ -5069,6 +5072,7 @@ async function saveRepair(id){
   let swapRule = {fields:{}};
   if(swap){ swapRule = swapFieldsFromForm(prevRec, activationDate, newImei); if(swapRule.error){ alert(swapRule.error); return; } }
   const repairType = g('f_repairType');
+  { const dup = duplicatePartError(modalPartsUsed); if(dup){ alert(dup); return; } }
   const fields = {customerName, phone, branchId, deviceBrand, deviceModel, imei, issue, faults, issueNote, repairType, estCost, laborCost, quoteStatus, technician, serviceType, warrantyStatus, activationDate, warrantyMonths, warrantyExpiry, newImei, newDeviceModel, swapDate, swapNote, swapInvId, partsUsed: JSON.parse(JSON.stringify(modalPartsUsed)), softwareOps: [...modalSoftware], photoBefore:modalPhotoBefore, photoAfter:modalPhotoAfter};
   Object.assign(fields, swapRule.fields);
   if(out && prevRec && prevRec.quoteStatus!==quoteStatus) fields.quoteAt = new Date().toISOString();
@@ -5380,8 +5384,11 @@ function confirmReceiptTransfer(id){
     job.partArrivedAt = t.receivedAt;
     if(!Array.isArray(job.statusHistory)) job.statusHistory = [];
     job.statusHistory.push({s:job.status, at:t.receivedAt, by:currentActorName(), note:`${TT('وصلت القطعة','Part arrived')}: ${t.name} ×${t.qty}`});
-    if(!(job.partsUsed||[]).some(p=>p.invId===destItem.id) && confirm(TT(`وصلت القطعة للجوب ${job.jobNo||''}. تضيفها لقطع الجوب هسه؟ (تنصرف من المخزن لما يبدي التصليح)`, `The part for job ${job.jobNo||''} arrived. Add it to the job's parts now? (taken from stock when repair starts)`))){
-      job.partsUsed = [...(job.partsUsed||[]), {invId:destItem.id, code:destItem.code, name:destItem.name, qty:t.qty, price:Number(destItem.sellPrice)||0}];
+    const arrivedLine = {invId:destItem.id, code:destItem.code, name:destItem.name, qty:1, price:Number(destItem.sellPrice)||0};
+    const dupMsg = duplicatePartError([...(job.partsUsed||[]), arrivedLine]);
+    if(dupMsg) alert(TT(`وصلت القطعة، بس ما انضافت للجوب ${job.jobNo||''}:\n`, `The part arrived but was not added to job ${job.jobNo||''}:\n`) + dupMsg);
+    else if(confirm(TT(`وصلت القطعة للجوب ${job.jobNo||''}. تضيفها لقطع الجوب هسه؟ (تنصرف من المخزن لما يبدي التصليح)`, `The part for job ${job.jobNo||''} arrived. Add it to the job's parts now? (taken from stock when repair starts)`))){
+      job.partsUsed = [...(job.partsUsed||[]), arrivedLine];
       if(isOutWarranty(job)) job.estCost = (Number(job.laborCost)||0) + job.partsUsed.reduce((s,p)=>s+(Number(p.price)||0)*p.qty,0);
       applyJobStock(job);
     }
@@ -5958,7 +5965,7 @@ function refreshPartSelect(){
     if(hint) hint.innerHTML = TT('سوفتوير ما يصرف قطعة من المخزن. اختار نوع السوفتوير ودوس «إضافة».','Software uses no stock. Choose the software work and press "Add".');
     return;
   }
-  if(qtyEl) qtyEl.disabled = false;
+  if(qtyEl){ qtyEl.value = 1; qtyEl.disabled = true; }   // always one piece per part
   const brand = (document.getElementById('f_deviceBrand')||{}).value||'';
   const model = (document.getElementById('f_deviceModel')||{}).value||'';
   ps.innerHTML = partOptionsHtml(modalCtx.branchId, type, brand, model);
@@ -5967,6 +5974,22 @@ function refreshPartSelect(){
   if(hint) hint.innerHTML = any ? '' : `<span style="color:var(--red);">${TT('ما في قطعة مطابقة متوفرة بمخزن الفرع لهذا الجهاز','No matching part in this branch for this device')}${type?' ('+type+')':''}.</span><br><span style="color:var(--text);">${partPickDiagnosis(modalCtx.branchId, type, brand, model)}</span>`;
 }
 
+// a job may use each part only once and only one part of each type (one screen, one board...)
+function duplicatePartError(lines){
+  const seenId = new Set(), seenType = new Map();
+  for(const l of (lines||[])){
+    if((Number(l.qty)||0)>1) return TT(`ما يصير تنصرف أكثر من قطعة وحدة من «${l.name}» على نفس الجوب.`, `Only one "${l.name}" can be issued to a job.`);
+    if(seenId.has(l.invId)) return TT(`«${l.name}» مضافة أصلاً لهذا الجوب. ما يصير تنصرف نفس القطعة مرتين.`, `"${l.name}" is already on this job. The same part cannot be issued twice.`);
+    seenId.add(l.invId);
+    const inv = state.inventory.find(p=>p.id===l.invId);
+    const t = inv ? partTypeOf(inv) : '';
+    if(t && t!=='أخرى'){
+      if(seenType.has(t)) return TT(`الجوب بيه «${t}» أصلاً (${seenType.get(t)}). ما يصير تنصرف قطعتين من نفس النوع على نفس الجوب.\nإذا القطعة الأولى غلط، احذفها من القائمة أولاً.`, `This job already has a ${t} (${seenType.get(t)}). Two parts of the same type cannot be issued to one job.\nIf the first one is wrong, remove it first.`);
+      seenType.set(t, l.name);
+    }
+  }
+  return null;
+}
 function addPickedItem(){
   const type = (document.getElementById('partType')||{}).value||'';
   if(type!==SW_TYPE){ addModalPart(); const rt = document.getElementById('f_repairType'); if(rt && modalPartsUsed.length){ rt.value = 'part'; rt.dataset.manual = '1'; } return; }
