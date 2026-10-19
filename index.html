@@ -501,6 +501,36 @@ details.hist table{margin-top:6px;}
 .tech-chip{display:inline-flex;align-items:center;gap:6px;}
 .chips{display:flex;flex-wrap:wrap;gap:6px;}
 .item-row input.price{min-width:110px;}
+.tickets{gap:8px !important;}
+.tickets .ticket{padding:10px 14px;gap:6px;}
+.tickets .ticket-device{font-size:14px;gap:6px;}
+.tickets .ticket-meta{font-size:12px;margin-top:2px;}
+.tickets .ticket-issue{padding:4px 10px;font-size:12.5px;}
+.tickets .ticket-price{font-size:14px;}
+.tickets .stepper-wrap .step-label{margin-top:3px;font-size:9px;}
+.tickets .step-dot{width:10px;height:10px;}
+.tickets .ticket-actions{gap:6px;}
+.tickets .ticket-actions .btn,.tickets .ticket .btn-sm{padding:4px 10px;font-size:12px;}
+.tickets details.hist{margin-top:0;font-size:12px;}
+.tickets .ticket .status-badge{padding:2px 8px;font-size:11px;}
+.ticket.st-1{background:#fff5f5;}
+.ticket.st-2,.ticket.st-3{background:#fffaf0;}
+.ticket.st-4{background:#fff5f5;}
+.ticket.st-5,.ticket.st-6{background:#f6f5ff;}
+.ticket.st-7{background:#f2fbf6;}
+.ticket.st-8{background:#f6f7f9;}
+.fault-picker{display:flex;flex-direction:column;gap:8px;}
+.fault-panel[hidden],.fault-cat-n[hidden]{display:none !important;}
+.fault-cats{display:flex;flex-wrap:wrap;gap:6px;}
+.fault-cat{display:inline-flex;align-items:center;gap:6px;border:1px solid #dcdfea;background:#fff;border-radius:10px;padding:7px 12px;font:600 12.5px inherit;font-family:inherit;color:var(--text,#1d1f2b);cursor:pointer;}
+.fault-cat.open{border-color:var(--violet,#5b5bf0);background:#f4f3ff;}
+.fault-cat.has{border-color:var(--violet,#5b5bf0);}
+.fault-cat-n{background:var(--violet,#5b5bf0);color:#fff;border-radius:999px;min-width:18px;height:18px;font-size:11px;display:inline-flex;align-items:center;justify-content:center;padding:0 5px;}
+.fault-cat-arrow{font-size:10px;opacity:.6;}
+.fault-cat.open .fault-cat-arrow{transform:rotate(180deg);}
+.fault-panel{background:#fafafe;border:1px dashed #dcdfea;border-radius:10px;padding:10px;}
+.fault-selected{font-size:12.5px;line-height:2;}
+.fault-tag{display:inline-block;background:#ecebff;color:var(--violet-dark,#3d3dc4);border-radius:999px;padding:1px 9px;font-weight:600;font-size:12px;}
 .warranty-toggle{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .warranty-toggle .btn{justify-content:center;white-space:normal;line-height:1.35;padding:10px 12px;}
 @media (max-width:560px){.warranty-toggle{grid-template-columns:1fr;}}
@@ -1549,7 +1579,7 @@ function filteredSwaps(){
   if(swapFilter==='pending') list = list.filter(r=>!r.newImei && r.status!==CANCELLED_STATUS);
   if(swapFilter==='done') list = list.filter(r=>!!r.newImei);
   if(swapFilter==='voc') list = list.filter(r=>isVoc(r));
-  if(swapFilter==='voc_pending') list = list.filter(r=>isVoc(r) && (r.vocStatus||'pending')==='pending');
+  if(swapFilter==='voc_pending') list = list.filter(r=>swapNeedsApproval(r) && (r.vocStatus||'pending')==='pending');
   if(swapFilter==='defect') list = list.filter(r=>r.swapKind==='defect');
   if(swapSearch){
     const q = swapSearch.toLowerCase();
@@ -1575,7 +1605,7 @@ function renderSwaps(){
       <div class="kpi tint-pink"><div class="kpi-top"><p class="kpi-label">${T('swapTotal')}</p><div class="kpi-icon pink">${icon('swap')}</div></div><p class="kpi-value">${all.length}</p></div>
       <div class="kpi tint-green"><div class="kpi-top"><p class="kpi-label">${T('swapDone')}</p><div class="kpi-icon green">${icon('check')}</div></div><p class="kpi-value">${doneCount}</p></div>
       <div class="kpi ${pendingCount?'tint-red':'tint-blue'}"><div class="kpi-top"><p class="kpi-label">${T('swapPending')}</p><div class="kpi-icon ${pendingCount?'red':'blue'}">${icon('history')}</div></div><p class="kpi-value">${pendingCount}</p></div>
-      <div class="kpi ${pendingVocCount()?'tint-amber':'tint-blue'}"><div class="kpi-top"><p class="kpi-label">${TT('VOC بانتظار موافقة المدير','VOC awaiting admin approval')}</p><div class="kpi-icon ${pendingVocCount()?'amber':'blue'}">${icon('check')}</div></div><p class="kpi-value">${pendingVocCount()}</p></div>
+      <div class="kpi ${pendingVocCount()?'tint-amber':'tint-blue'}"><div class="kpi-top"><p class="kpi-label">${TT('SWAP بانتظار موافقة المدير','SWAPs awaiting admin approval')}</p><div class="kpi-icon ${pendingVocCount()?'amber':'blue'}">${icon('check')}</div></div><p class="kpi-value">${pendingVocCount()}</p></div>
     </div>
     <p style="font-size:12px;color:var(--muted);margin:-6px 0 12px;">${TT(`الاستبدال خلال أول ${SWAP_DEFECT_DAYS} أيام من تفعيل الجهاز يعتبر عيب مصنعي. بعدها يعتبر VOC ويحتاج موافقة خاصة من المدير.`, `A swap within the first ${SWAP_DEFECT_DAYS} days of activation is a manufacturing defect. After that it is a VOC exception that needs special admin approval.`)}</p>
     <div class="toolbar">
@@ -1585,7 +1615,7 @@ function renderSwaps(){
         <option value="pending" ${swapFilter==='pending'?'selected':''}>${T('swapPending')}</option>
         <option value="done" ${swapFilter==='done'?'selected':''}>${T('swapDone')}</option>
         <option value="voc" ${swapFilter==='voc'?'selected':''}>VOC</option>
-        <option value="voc_pending" ${swapFilter==='voc_pending'?'selected':''}>${TT('VOC بانتظار الموافقة','VOC pending approval')}</option>
+        <option value="voc_pending" ${swapFilter==='voc_pending'?'selected':''}>${TT('بانتظار موافقة المدير','Awaiting admin approval')}</option>
         <option value="defect" ${swapFilter==='defect'?'selected':''}>${TT('عيب مصنعي','Manufacturing defect')}</option>
       </select>
       <button class="btn" onclick="exportSwapsExcel()">${icon('receipt')} ${T('exportExcel')}</button>
@@ -1627,7 +1657,7 @@ function renderSwapDetail(r){
       ${row(T('receivedOn'), fmtDate(r.createdAt))}
       ${row(TT('تاريخ التفعيل','Activation date'), r.activationDate?fmtISODate(r.activationDate):'')}
       ${row(TT('نوع الاستبدال','Swap type'), r.swapKind ? swapKindBadge(r) : '')}
-      ${isVoc(r)?row(TT('ملاحظة المدير','Admin note'), [r.vocNote, r.vocBy?(r.vocBy+' · '+(r.vocAt?fmtDate(r.vocAt):'')):''].filter(Boolean).join(' — ')):''}
+      ${swapNeedsApproval(r)?row(TT('ملاحظة المدير','Admin note'), [r.vocNote, r.vocBy?(r.vocBy+' · '+(r.vocAt?fmtDate(r.vocAt):'')):''].filter(Boolean).join(' — ')):''}
       ${row(T('swapDateLabel'), r.swapDate?fmtDate(r.swapDate):'')}
       ${row(T('xlDeliveredDate'), r.deliveredAt?fmtDate(r.deliveredAt):'')}
       ${row(T('jobAgeLabel'), jobAgeDays(r)+' '+T('daysLabel'))}
@@ -1665,8 +1695,8 @@ function exportSwapsExcel(){
   const list = filteredSwaps();
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet([
-    [T('jobCardNo'), T('colBranch'), T('xlReceivedDate'), T('swapDateLabel'), T('xlDeliveredDate'), T('xlJobAge'), T('xlCustomer'), T('xlPhone'), T('deviceBrand'), T('xlModel'), T('oldImeiLabel'), T('newImeiLabel'), T('newDeviceModelLabel'), T('xlIssue'), T('status'), T('xlWarranty'), T('xlCost'), T('xlTechnician'), T('swapNoteLabel'), TT('تاريخ التفعيل','Activation date'), TT('أيام من التفعيل','Days from activation'), TT('نوع الاستبدال','Swap type'), TT('موافقة VOC','VOC approval'), TT('ملاحظة المدير','Admin note')],
-    ...list.map(r=>[r.jobNo||'', branchName(r.branchId), fmtDate(r.createdAt), r.swapDate?fmtDate(r.swapDate):'', r.deliveredAt?fmtDate(r.deliveredAt):'', jobAgeDays(r), r.customerName||'', String(r.phone||''), r.deviceBrand||'', r.deviceModel||'', String(r.imei||''), String(r.newImei||''), r.newDeviceModel||'', r.issue||'', DL(r.status), DL(r.warrantyStatus||WARRANTY_STATUSES[0]), Number(r.estCost)||0, r.technician||'', r.swapNote||'', r.activationDate?fmtISODate(r.activationDate):'', (r.swapDays===undefined?'':r.swapDays), r.swapKind==='defect'?TT('عيب مصنعي','Defect'):r.swapKind==='voc'?'VOC':'', isVoc(r)?({approved:TT('موافق','Approved'),rejected:TT('مرفوض','Rejected')}[r.vocStatus]||TT('بانتظار','Pending')):'', r.vocNote||''])
+    [T('jobCardNo'), T('colBranch'), T('xlReceivedDate'), T('swapDateLabel'), T('xlDeliveredDate'), T('xlJobAge'), T('xlCustomer'), T('xlPhone'), T('deviceBrand'), T('xlModel'), T('oldImeiLabel'), T('newImeiLabel'), T('newDeviceModelLabel'), T('xlIssue'), T('status'), T('xlWarranty'), T('xlCost'), T('xlTechnician'), T('swapNoteLabel'), TT('تاريخ التفعيل','Activation date'), TT('أيام من التفعيل','Days from activation'), TT('نوع الاستبدال','Swap type'), TT('موافقة المدير','Admin approval'), TT('ملاحظة المدير','Admin note'), TT('طريقة الاستبدال','Resolution'), TT('مبلغ التعويض','Compensation')],
+    ...list.map(r=>[r.jobNo||'', branchName(r.branchId), fmtDate(r.createdAt), r.swapDate?fmtDate(r.swapDate):'', r.deliveredAt?fmtDate(r.deliveredAt):'', jobAgeDays(r), r.customerName||'', String(r.phone||''), r.deviceBrand||'', r.deviceModel||'', String(r.imei||''), String(r.newImei||''), r.newDeviceModel||'', r.issue||'', DL(r.status), DL(r.warrantyStatus||WARRANTY_STATUSES[0]), Number(r.estCost)||0, r.technician||'', r.swapNote||'', r.activationDate?fmtISODate(r.activationDate):'', (r.swapDays===undefined?'':r.swapDays), r.swapKind==='defect'?TT('عيب مصنعي','Defect'):r.swapKind==='voc'?'VOC':'', swapNeedsApproval(r)?({approved:TT('موافق','Approved'),rejected:TT('مرفوض','Rejected')}[r.vocStatus]||TT('بانتظار','Pending')):'', r.vocNote||'', isRefundSwap(r)?TT('تعويض مالي','Compensation'):TT('جهاز بديل','Replacement'), isRefundSwap(r)?(Number(r.refundAmount)||0):''])
   ]);
   ws['!cols'] = [{wch:24},{wch:14},{wch:13},{wch:13},{wch:13},{wch:12},{wch:22},{wch:14},{wch:12},{wch:22},{wch:18},{wch:18},{wch:22},{wch:28},{wch:18},{wch:14},{wch:12},{wch:16},{wch:26}];
   XLSX.utils.book_append_sheet(wb, ws, 'SWAP');
@@ -4348,7 +4378,7 @@ function planJobStock(r, opts){
     }
     moves.push({invId:id, d:diff});
   }
-  const defWant = (!gone && isSwapRepair(r) && r.newImei) ? 1 : 0;
+  const defWant = (!gone && isSwapRepair(r) && swapResolved(r)) ? 1 : 0;
   return {moves, short, defDiff: defWant - (r.id ? jobDefectiveIn(r) : 0)};
 }
 function applyJobStock(r, opts){
@@ -4410,12 +4440,13 @@ function checkStatusChange(r, to){
     const pm = needsPartError(r);
     if(pm){ if(authRole==='admin') add(pm + TT('\nتكمل كمدير؟','\nContinue as admin?')); else return {error: pm}; }
   }
-  if(isVoc(r) && r.vocStatus!=='approved' && [ST.REPAIR, ST.PARTS, ST.DONE, ST.READY, ST.DELIV].includes(to)){
+  if(swapNeedsApproval(r) && r.vocStatus!=='approved' && [ST.REPAIR, ST.PARTS, ST.DONE, ST.READY, ST.DELIV].includes(to)){
     const m = vocBlockMsg(r) + (r.vocStatus==='rejected' ? TT('\nالمدير رفض الطلب.','\nThe admin rejected it.') : '');
     if(authRole==='admin') add(m + TT('\nتكمل كمدير بدون تسجيل الموافقة؟','\nContinue as admin without recording approval?')); else return {error: m};
   }
   if([ST.DONE, ST.READY, ST.DELIV].includes(to) && !String(r.imei||'').trim()) return {error: TT('الجوب ما يطلع بدون IMEI الجهاز. افتح الجوب واكتب الـ IMEI (من *#06# أو كارتونة الجهاز) قبل ما تكمله.','A job cannot be completed or delivered without the device IMEI. Open the job and enter the IMEI (from *#06# or the box) first.')};
-  if([ST.DONE, ST.READY, ST.DELIV].includes(to) && isSwapRepair(r) && !r.newImei) return {error: TT('جهاز السواب ما يطلع بدون IMEI الجهاز الجديد. افتح الجوب وسجّل الـ IMEI الجديد أولاً.','A SWAP cannot be completed or delivered without the new device IMEI. Open the job and record the new IMEI first.')};
+  if([ST.DONE, ST.READY, ST.DELIV].includes(to) && isRefundSwap(r) && !((Number(r.refundAmount)||0)>0)) return {error: TT('السواب بتعويض مالي: سجّل مبلغ التعويض بالجوب قبل ما تكمله.','Money-compensation SWAP: record the compensation amount before completing the job.')};
+  if([ST.DONE, ST.READY, ST.DELIV].includes(to) && isSwapRepair(r) && !isRefundSwap(r) && !r.newImei) return {error: TT('جهاز السواب ما يطلع بدون IMEI الجهاز الجديد. افتح الجوب وسجّل الـ IMEI الجديد أولاً.','A SWAP cannot be completed or delivered without the new device IMEI. Open the job and record the new IMEI first.')};
   if(to===ST.DELIV && isOutWarranty(r) && r.quoteStatus==='approved' && (Number(r.estCost)||0)>0 && !r.paid && !r.invoiceId){
     add(TT('الجوب غير مسدد. متأكد تريد تسلّم الجهاز؟','This job is not paid. Deliver the device anyway?'));
   }
@@ -4748,7 +4779,7 @@ function ticketCard(r, compact){
     <div class="ticket st-${stIdx+1}">
       <div class="ticket-top">
         <div>
-          <div class="ticket-device">${deviceLabel(r)} <span class="status-badge status-${stIdx+1}">${DL(r.status)}</span>${isSwapRepair(r)?`<span class="status-badge badge-swap">SWAP</span>`:''}${swapKindBadge(r)}${r.warrantyStatus?`<span class="status-badge ${r.warrantyStatus==='ضمن الضمان'?'badge-warranty-in':'badge-warranty-out'}">${DL(r.warrantyStatus)}</span>`:''}${quoteBadge(r)}${(!isSwapRepair(r) && r.repairType)?`<span class="status-badge ${r.repairType==='part'?((r.partsUsed||[]).length?'badge-branch':'badge-quote-pending'):'badge-branch'}">${r.repairType==='part'?((r.partsUsed||[]).length?TT('تبديل قطعة','Part replacement'):TT('يحتاج قطعة — ما انصرفت بعد','Needs a part — not issued yet')):TT('سوفتوير','Software')}</span>`:''}${r.repeatOf?`<span class="status-badge badge-repeat" title="${TT('رجع خلال 30 يوم من الجوب','Returned within 30 days of job')} ${r.repeatOf}">${TT('راجع','Repeat')} ↺</span>`:''}${r.partArrivedAt && r.status===ST.PARTS?`<span class="status-badge badge-quote-ok">${TT('وصلت القطعة','Part arrived')} ✓</span>`:''}${r.branchId?`<span class="status-badge badge-branch">${branchName(r.branchId)}</span>`:''}</div>
+          <div class="ticket-device">${deviceLabel(r)} <span class="status-badge status-${stIdx+1}">${DL(r.status)}</span>${isSwapRepair(r)?`<span class="status-badge badge-swap">SWAP</span>`:''}${swapKindBadge(r)}${isRefundSwap(r)?`<span class="status-badge badge-quote-pending">${TT('تعويض مالي','Compensation')}${r.refundAmount?': '+money(r.refundAmount):''}</span>`:''}${r.warrantyStatus?`<span class="status-badge ${r.warrantyStatus==='ضمن الضمان'?'badge-warranty-in':'badge-warranty-out'}">${DL(r.warrantyStatus)}</span>`:''}${quoteBadge(r)}${(!isSwapRepair(r) && r.repairType)?`<span class="status-badge ${r.repairType==='part'?((r.partsUsed||[]).length?'badge-branch':'badge-quote-pending'):'badge-branch'}">${r.repairType==='part'?((r.partsUsed||[]).length?TT('تبديل قطعة','Part replacement'):TT('يحتاج قطعة — ما انصرفت بعد','Needs a part — not issued yet')):TT('سوفتوير','Software')}</span>`:''}${r.repeatOf?`<span class="status-badge badge-repeat" title="${TT('رجع خلال 30 يوم من الجوب','Returned within 30 days of job')} ${r.repeatOf}">${TT('راجع','Repeat')} ↺</span>`:''}${r.partArrivedAt && r.status===ST.PARTS?`<span class="status-badge badge-quote-ok">${TT('وصلت القطعة','Part arrived')} ✓</span>`:''}${r.branchId?`<span class="status-badge badge-branch">${branchName(r.branchId)}</span>`:''}</div>
           <div class="ticket-meta">${r.jobNo?`<span class="mono" style="font-weight:600;color:var(--violet-dark);">${T('jobCardNo')}: ${r.jobNo}</span> · `:''}${r.imei?('IMEI: '+r.imei+' · '):''}${(isSwapRepair(r)&&r.newImei)?(T('newImeiShort')+': '+r.newImei+' · '):''}<button class="link-btn" onclick="openCustomerHistory('${r.id}')" title="${TT('سجل الزبون','Customer history')}">${r.customerName}</button>${visits?` <span style="font-size:11px;color:var(--muted);">(${TT('زيارات سابقة','previous visits')}: ${visits})</span>`:''} · ${r.phone} · ${T('receivedOn')} ${fmtDate(r.createdAt)}${r.deliveredAt?' · '+T('deliveredOn')+' '+fmtDate(r.deliveredAt):''} · ${T('jobAgeLabel')}: ${jobAgeDays(r)} ${T('daysLabel')}${r.technician?' · '+T('technicianLabel')+' '+r.technician:''}${(!out && expiry)?` · ${TT('الضمان لغاية','Warranty until')} ${fmtISODate(expiry)}`:''}</div>
           ${(r.photoBefore||r.photoAfter)?`<div class="ticket-photos">
             ${r.photoBefore?`<a href="${r.photoBefore}" target="_blank" rel="noopener" class="ticket-photo-link"><img src="${r.photoBefore}" class="ticket-photo-thumb"><span>${T('photoBefore')}</span></a>`:''}
@@ -4876,14 +4907,23 @@ function openRepairModal(id){
     <div class="swap-fields" id="swapFields" style="display:${editing&&isSwapRepair(editing)?'block':'none'};">
       <h4>${icon('swap')} ${T('swapDetailsTitle')}</h4>
       ${vocFormHtml(editing)}
+      ${(()=>{ const res = editing&&editing.swapResolution==='refund' ? 'refund' : 'device'; return `<div class="form-row"><label>${TT('طريقة الاستبدال','Swap resolution')}</label>
+        <div class="warranty-toggle" id="swapResToggle" role="group">
+          <button type="button" class="btn ${res==='device'?'btn-primary':''}" data-r="device" onclick="setSwapResolution('device')">${TT('جهاز بديل (IMEI جديد)','Replacement device (new IMEI)')}</button>
+          <button type="button" class="btn ${res==='refund'?'btn-primary':''}" data-r="refund" onclick="setSwapResolution('refund')">${TT('تعويض مالي للزبون','Money compensation')}</button>
+        </div><input type="hidden" id="f_swapResolution" value="${res}"></div>
+      <div id="swapRefundBox" class="form-2col" style="display:${res==='refund'?'grid':'none'};">
+        <div class="form-row"><label>${TT('مبلغ التعويض (د.ع)','Compensation amount (IQD)')}</label><input id="f_refundAmount" type="text" inputmode="numeric" value="${editing&&editing.refundAmount?money(editing.refundAmount):''}" placeholder="${TT('إجباري قبل تسليم المبلغ','required before paying out')}" onblur="this.value=fmtIQDInput(this.value)"></div>
+        <div class="form-row"><label>${TT('تاريخ التعويض','Compensation date')}</label><input id="f_refundDate" type="date" value="${editing&&editing.refundDate?editing.refundDate.slice(0,10):''}"></div>
+      </div>`; })()}
       <div class="form-2col">
         <div class="form-row"><label>${T('oldImeiLabel')}</label><input value="${editing?(editing.imei||''):''}" class="mono" disabled placeholder="${T('oldImeiHint')}"></div>
-        <div class="form-row"><label>${T('newImeiLabel')}</label><input id="f_newImei" class="mono" value="${editing?(editing.newImei||''):''}" placeholder="${TT('15 رقم — إجباري قبل تسليم الجهاز للزبون','15 digits — required before handing over')}" maxlength="17" inputmode="numeric"></div>
+        <div class="form-row swap-dev-only"><label>${T('newImeiLabel')}</label><input id="f_newImei" class="mono" value="${editing?(editing.newImei||''):''}" placeholder="${TT('15 رقم — إجباري قبل تسليم الجهاز للزبون','15 digits — required before handing over')}" maxlength="17" inputmode="numeric"></div>
       </div>
-      <div class="form-row"><label>${TT('الجهاز البديل من المخزن','Replacement device from stock')}</label><select id="f_swapInv">${swapInvOptionsHtml(modalBranchId, editing?editing.swapInvId:'')}</select>
+      <div class="form-row swap-dev-only"><label>${TT('الجهاز البديل من المخزن','Replacement device from stock')}</label><select id="f_swapInv">${swapInvOptionsHtml(modalBranchId, editing?editing.swapInvId:'')}</select>
         <div style="font-size:11.5px;color:var(--muted);margin-top:4px;">${TT('ينصرف من المخزن لما تسجل الـ IMEI الجديد، والجهاز القديم ينضاف تلقائياً لمخزون الأجهزة العاطلة.','Taken from stock once the new IMEI is recorded; the old device is added automatically to the defective stock.')}</div></div>
       <div class="form-2col">
-        <div class="form-row"><label>${T('newDeviceModelLabel')}</label><input id="f_newDeviceModel" value="${editing?(editing.newDeviceModel||''):''}" placeholder="${T('newDeviceModelPh')}"></div>
+        <div class="form-row swap-dev-only"><label>${T('newDeviceModelLabel')}</label><input id="f_newDeviceModel" value="${editing?(editing.newDeviceModel||''):''}" placeholder="${T('newDeviceModelPh')}"></div>
         <div class="form-row"><label>${T('swapDateLabel')}</label><input id="f_swapDate" type="date" value="${editing&&editing.swapDate?editing.swapDate.slice(0,10):''}"></div>
       </div>
       <div class="form-row"><label>${T('swapNoteLabel')}</label><input id="f_swapNote" value="${editing?(editing.swapNote||''):''}" placeholder="${T('swapNotePh')}"></div>
@@ -4898,6 +4938,7 @@ function openRepairModal(id){
         <div id="photoAfterPreview"></div>
       </div>
     </div>
+    <div id="repairOnlyBox" style="display:${editing&&isSwapRepair(editing)?'none':'block'};">
     <div class="form-row"><label>${TT('نوع الإصلاح','Repair type')}</label>
       <select id="f_repairType" onchange="this.dataset.manual='1'">
         <option value="" ${editing&&!editing.repairType?'selected':''}>${TT('— يحدده الفني بعد التشخيص —','— Set by the technician after diagnosis —')}</option>
@@ -4908,6 +4949,7 @@ function openRepairModal(id){
       <div id="modalPartsList"></div>
       ${partPickerHtml()}
       <p style="font-size:11.5px;color:var(--muted);margin:4px 0 0;">${TT('القطع تنحجز للجوب وتنصرف من المخزن لما تصير الحالة «قيد الإصلاح». إذا القطعة مو موجودة اطلبها من المخزن الرئيسي.','Parts are reserved for the job and taken from stock when the status becomes "In repair". If a part is missing, request it from the main warehouse.')}</p>
+    </div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-primary" id="saveRepairBtn" onclick="saveRepair(${editing?`'${id}'`:'null'})">${T('save')}</button>
@@ -5056,7 +5098,11 @@ async function saveRepair(id){
   const serviceType = g('f_serviceType');
   const warrantyStatus = g('f_warranty');
   const swap = serviceType===SERVICE_TYPES[1];
-  const newImei = swap ? g('f_newImei').trim() : '';
+  const swapResolution = swap ? (g('f_swapResolution')||'device') : '';
+  const refundMode = swapResolution==='refund';
+  const newImei = (swap && !refundMode) ? g('f_newImei').trim() : '';
+  const refundAmount = refundMode ? confirmSmallIQD(parseIQD(g('f_refundAmount')), TT('مبلغ التعويض','Compensation')) : 0;
+  const refundDateVal = refundMode ? g('f_refundDate') : '';
   const newDeviceModel = swap ? g('f_newDeviceModel').trim() : '';
   const swapDateVal = swap ? g('f_swapDate') : '';
   const swapNote = swap ? g('f_swapNote').trim() : '';
@@ -5090,11 +5136,17 @@ async function saveRepair(id){
   if(!out && !activationDate && !prevRec && !confirm(TT('ما محدد تاريخ تفعيل الجهاز وهو داخل الضمان. تكمل بدون تاريخ؟','No activation date entered for an in-warranty device. Continue without it?'))) return;
   const swapDate = swapDateVal ? new Date(swapDateVal+'T12:00:00').toISOString() : ((prevRec&&prevRec.swapDate&&newImei) ? prevRec.swapDate : (newImei ? new Date().toISOString() : ''));
   let swapRule = {fields:{}};
-  if(swap){ swapRule = swapFieldsFromForm(prevRec, activationDate, newImei); if(swapRule.error){ alert(swapRule.error); return; } }
+  if(swap){ swapRule = swapFieldsFromForm(prevRec, activationDate, newImei || (refundAmount ? 'refund' : '')); if(swapRule.error){ alert(swapRule.error); return; } }
   const repairType = g('f_repairType');
   { const dup = duplicatePartError(modalPartsUsed); if(dup){ alert(dup); return; } }
   const fields = {customerName, phone, branchId, deviceBrand, deviceModel, imei, issue, faults, issueNote, repairType, estCost, laborCost, quoteStatus, technician, serviceType, warrantyStatus, activationDate, warrantyMonths, warrantyExpiry, newImei, newDeviceModel, swapDate, swapNote, swapInvId, partsUsed: JSON.parse(JSON.stringify(modalPartsUsed)), softwareOps: [...modalSoftware], photoBefore:modalPhotoBefore, photoAfter:modalPhotoAfter};
   Object.assign(fields, swapRule.fields);
+  if(swap){
+    fields.swapResolution = swapResolution; fields.refundAmount = refundAmount;
+    fields.refundDate = refundAmount ? (refundDateVal ? new Date(refundDateVal+'T12:00:00').toISOString() : ((prevRec&&prevRec.refundDate) || new Date().toISOString())) : '';
+    if(refundMode){ fields.swapInvId = ''; fields.newDeviceModel = ''; }
+    fields.repairType = ''; fields.partsUsed = []; fields.softwareOps = [];   // a SWAP uses no repair parts
+  }
   if(out && prevRec && prevRec.quoteStatus!==quoteStatus) fields.quoteAt = new Date().toISOString();
   // status rules
   const fromStatus = prevRec ? prevRec.status : ST.RECV;
@@ -5466,7 +5518,8 @@ function claimRows(){
     const custom = r.claimLabor!==undefined && r.claimLabor!==null && r.claimLabor!=='';
     const labor = custom ? (Number(r.claimLabor)||0) : claimFee(kind);
     // SWAP: the replacement device comes from the company, so only the service fee is claimed
-    const value = (kind==='swap' ? 0 : partsValue) + labor;
+    const refund = (kind==='swap' && r.swapResolution==='refund') ? (Number(r.refundAmount)||0) : 0;
+    const value = (kind==='swap' ? refund : partsValue) + labor;
     return {r, lines, partsValue, labor, custom, value, kind};
   }).filter(x=>x.kind);
 }
@@ -5530,7 +5583,7 @@ function renderClaims(){
           <td>${branchName(x.r.branchId)}</td><td>${deviceLabel(x.r)}${isSwapRepair(x.r)?' <span class="status-badge badge-swap">SWAP</span>':''}</td>
           <td class="mono" style="font-size:12px;">${x.r.imei||'-'}${x.r.newImei?`<div>→ ${x.r.newImei}</div>`:''}</td>
           <td><span class="status-badge ${x.kind==='swap'?'badge-swap':(x.kind==='software'?'badge-quote-pending':'badge-branch')}">${claimKindLabel(x.kind)}</span></td>
-          <td style="font-size:12.5px;">${x.lines.map(l=>`${l.name} ×${l.qty}`).join('، ')||(x.kind==='software'?(softwareOpsLabel(x.r.softwareOps)||TT('بدون قطع','No parts')):'-')}${x.kind==='swap'?`<div style="font-size:11px;color:var(--muted);">${TT('الجهاز البديل من الشركة — ما ينحسب','Replacement from the company — not counted')}</div>`:''}</td>
+          <td style="font-size:12.5px;">${x.lines.map(l=>`${l.name} ×${l.qty}`).join('، ')||(x.kind==='software'?(softwareOpsLabel(x.r.softwareOps)||TT('بدون قطع','No parts')):'-')}${x.kind==='swap'?(x.r.swapResolution==='refund'?`<div style="font-size:11.5px;font-weight:600;">${TT('تعويض مالي للزبون:','Money compensation:')} ${money(x.r.refundAmount||0)}</div>`:`<div style="font-size:11px;color:var(--muted);">${TT('الجهاز البديل من الشركة — ما ينحسب','Replacement from the company — not counted')}</div>`):''}</td>
           <td>${authRole==='admin'?`<input type="text" inputmode="numeric" value="${x.labor?money(x.labor):''}" placeholder="0" style="width:90px;${x.custom?'':'color:var(--muted);'}" title="${x.custom?TT('معدّلة يدوياً','Set manually'):TT('الأجور الافتراضية','Default fee')}" onchange="setClaimLabor('${x.r.id}', this.value)">`:`<span class="mono">${money(x.labor)}</span>`}</td>
           <td class="mono">${money(x.value)}</td>
           <td>${authRole==='admin'?`<select onchange="setClaimStatus('${x.r.id}', this.value)">${Object.keys(CLAIM_LABELS).map(k=>`<option value="${k}" ${(x.r.claimStatus||'')===k?'selected':''}>${CLAIM_LABELS[k][lang==='ar'?0:1]}</option>`).join('')}</select>`:CLAIM_LABELS[x.r.claimStatus||''][lang==='ar'?0:1]}</td>
@@ -5652,15 +5705,23 @@ function daysFromActivation(activationDate, refISO){
 }
 function swapKindForDays(days){ return (days!==null && days<=SWAP_DEFECT_DAYS) ? 'defect' : 'voc'; }
 function isVoc(r){ return isSwapRepair(r) && r.swapKind==='voc'; }
-function vocApproved(r){ return !isVoc(r) || r.vocStatus==='approved'; }
+// every SWAP needs the admin's approval before the replacement is handed over (VOC is the special case after 7 days)
+function swapNeedsApproval(r){ return isSwapRepair(r) && !!r.swapKind; }
+function swapApproved(r){ return !swapNeedsApproval(r) || r.vocStatus==='approved'; }
+function vocApproved(r){ return swapApproved(r); }
 function swapKindBadge(r){
   if(!isSwapRepair(r) || !r.swapKind) return '';
-  if(r.swapKind==='defect') return `<span class="status-badge badge-quote-ok" title="${TT('أيام من التفعيل','days from activation')}: ${r.swapDays}">${TT('عيب مصنعي','Manufacturing defect')} (${r.swapDays} ${TT('يوم','d')})</span>`;
   const st = r.vocStatus||'pending';
+  if(r.swapKind==='defect'){
+    const lbl = st==='approved' ? TT('✓ موافقة المدير','✓ admin approved') : st==='rejected' ? TT('مرفوض من المدير','rejected by admin') : TT('بانتظار موافقة المدير','awaiting admin approval');
+    return `<span class="status-badge badge-quote-ok" title="${TT('أيام من التفعيل','days from activation')}: ${r.swapDays}">${TT('عيب مصنعي','Manufacturing defect')} (${r.swapDays} ${TT('يوم','d')})</span><span class="status-badge ${st==='approved'?'badge-quote-ok':st==='rejected'?'badge-quote-no':'badge-quote-pending'}">SWAP ${lbl}</span>`;
+  }
   const label = st==='approved' ? TT('VOC ✓ موافقة المدير','VOC ✓ admin approved') : st==='rejected' ? TT('VOC مرفوض','VOC rejected') : TT('VOC بانتظار موافقة المدير','VOC awaiting admin approval');
   return `<span class="status-badge ${st==='approved'?'badge-quote-ok':st==='rejected'?'badge-quote-no':'badge-quote-pending'}" title="${TT('أيام من التفعيل','days from activation')}: ${r.swapDays}">${label} (${r.swapDays} ${TT('يوم','d')})</span>`;
 }
 function vocBlockMsg(r){
+  if(r.swapKind==='defect' || (r.swapDays!==undefined && r.swapDays<=SWAP_DEFECT_DAYS && r.swapKind!=='voc'))
+    return TT('الاستبدال يحتاج موافقة المدير قبل تسليم الجهاز البديل. الطلب وصل للمدير وينتظر موافقته.','The swap needs the admin\'s approval before the replacement is handed over. The request is waiting for the admin.');
   return TT(`هذا الاستبدال بعد ${r.swapDays} يوم من تفعيل الجهاز (أكثر من ${SWAP_DEFECT_DAYS} أيام)، فيعتبر VOC ويحتاج موافقة خاصة من المدير.`,
             `This swap is ${r.swapDays} days after activation (more than ${SWAP_DEFECT_DAYS}), so it is a VOC exception that needs special admin approval.`);
 }
@@ -5681,8 +5742,10 @@ function updateSwapRule(){
   }
   if(days<0){ el.innerHTML = `<div class="info-box bad">${TT('تاريخ التفعيل بعد تاريخ الاستلام، تأكد منه.','The activation date is after the intake date, check it.')}</div>`; if(vocBox) vocBox.style.display='none'; return; }
   if(swapKindForDays(days)==='defect'){
-    el.innerHTML = `<div class="info-box good">${TT(`مضى ${days} يوم على التفعيل — استبدال عيب مصنعي (ضمن أول ${SWAP_DEFECT_DAYS} أيام).`, `${days} day(s) since activation — manufacturing-defect swap (within the first ${SWAP_DEFECT_DAYS} days).`)}</div>`;
-    if(vocBox) vocBox.style.display = 'none';
+    const s = editing && editing.swapKind==='defect' ? (editing.vocStatus||'pending') : 'pending';
+    el.innerHTML = `<div class="info-box good">${TT(`مضى ${days} يوم على التفعيل — استبدال عيب مصنعي (ضمن أول ${SWAP_DEFECT_DAYS} أيام). يحتاج موافقة المدير قبل تسليم الجهاز البديل.`, `${days} day(s) since activation — manufacturing-defect swap (within the first ${SWAP_DEFECT_DAYS} days). Needs admin approval before the replacement is handed over.`)}
+      ${authRole!=='admin'?`<br>${TT('حالة الموافقة','Approval')}: <b>${s==='approved'?TT('موافق ✓','Approved ✓'):s==='rejected'?TT('مرفوض','Rejected'):TT('بانتظار المدير','Waiting for admin')}</b>`:''}</div>`;
+    if(vocBox) vocBox.style.display = authRole==='admin' ? 'block' : 'none';
   }else{
     const s = editing && editing.swapKind==='voc' ? (editing.vocStatus||'pending') : 'pending';
     el.innerHTML = `<div class="info-box bad"><b>VOC</b> — ${TT(`مضى ${days} يوم على التفعيل (أكثر من ${SWAP_DEFECT_DAYS} أيام). الاستبدال يحتاج موافقة خاصة من المدير قبل تسليم الجهاز البديل.`, `${days} days since activation (more than ${SWAP_DEFECT_DAYS}). The swap needs special admin approval before the replacement is handed over.`)}
@@ -5691,14 +5754,14 @@ function updateSwapRule(){
   }
 }
 function vocFormHtml(editing){
-  const st = editing && editing.swapKind==='voc' ? (editing.vocStatus||'pending') : 'pending';
+  const st = editing && editing.swapKind ? (editing.vocStatus||'pending') : 'pending';
   return `<div id="swapRuleInfo"></div>
     <div id="vocBox" class="cost-box" style="display:none;">
       <div class="form-2col">
-        <div class="form-row"><label>${TT('قرار المدير على VOC','Admin decision on VOC')}</label>
+        <div class="form-row"><label>${TT('قرار المدير على الاستبدال','Admin decision on the swap')}</label>
           <select id="f_vocStatus">
             <option value="pending" ${st==='pending'?'selected':''}>${TT('بانتظار القرار','Pending')}</option>
-            <option value="approved" ${st==='approved'?'selected':''}>${TT('موافقة خاصة (VOC)','Special approval (VOC)')}</option>
+            <option value="approved" ${st==='approved'?'selected':''}>${TT('موافقة','Approve')}</option>
             <option value="rejected" ${st==='rejected'?'selected':''}>${TT('رفض','Reject')}</option>
           </select></div>
         <div class="form-row"><label>${TT('سبب / ملاحظة الموافقة','Reason / note')}</label><input id="f_vocNote" value="${editing?(editing.vocNote||''):''}"></div>
@@ -5717,8 +5780,8 @@ function swapFieldsFromForm(prevRec, activationDate, newImei){
   if(days<0) return {error: TT('تاريخ التفعيل بعد تاريخ استلام الجهاز، تأكد منه.','The activation date is after the intake date, please check it.')};
   const kind = swapKindForDays(days);
   const f = {swapKind:kind, swapDays:days};
-  if(kind==='voc'){
-    const prevSt = (prevRec && prevRec.swapKind==='voc') ? (prevRec.vocStatus||'pending') : 'pending';
+  {
+    const prevSt = (prevRec && prevRec.swapKind===kind) ? (prevRec.vocStatus||'pending') : 'pending';
     let st = prevSt;
     if(authRole==='admin'){
       st = (document.getElementById('f_vocStatus')||{}).value || prevSt;
@@ -5726,31 +5789,50 @@ function swapFieldsFromForm(prevRec, activationDate, newImei){
       if(st!==prevSt){ f.vocBy = currentActorName(); f.vocAt = new Date().toISOString(); }
     }
     f.vocStatus = st;
-    if(newImei && st!=='approved') return {error: vocBlockMsg({swapDays:days}) + '\n' + TT('ما يصير تسجل الـ IMEI الجديد قبل الموافقة.','The new IMEI cannot be recorded before approval.')};
-  }else{
-    f.vocStatus = '';
+    if(newImei && st!=='approved') return {error: vocBlockMsg({swapDays:days, swapKind:kind}) + '\n' + (newImei==='refund' ? TT('ما يصير تسجل التعويض المالي قبل الموافقة.','The compensation cannot be recorded before approval.') : TT('ما يصير تسجل الـ IMEI الجديد قبل الموافقة.','The new IMEI cannot be recorded before approval.'))};
   }
   return {fields:f};
 }
 function setVocStatus(id, val){
   if(authRole!=='admin') return;
   const r = state.repairs.find(x=>x.id===id);
-  if(!r || !isVoc(r)) return;
-  const note = prompt(val==='approved' ? TT('سبب الموافقة الخاصة (VOC):','Reason for the special approval (VOC):') : TT('سبب الرفض:','Reason for rejection:'), r.vocNote||'');
+  if(!r || !swapNeedsApproval(r)) return;
+  const note = prompt(val==='approved' ? (isVoc(r) ? TT('سبب الموافقة الخاصة (VOC):','Reason for the special approval (VOC):') : TT('ملاحظة الموافقة (اختياري):','Approval note (optional):')) : TT('سبب الرفض:','Reason for rejection:'), r.vocNote||'');
   if(note===null) return;
   r.vocStatus = val; r.vocNote = note.trim(); r.vocBy = currentActorName(); r.vocAt = new Date().toISOString();
   if(!Array.isArray(r.statusHistory)) r.statusHistory = [];
-  r.statusHistory.push({s:r.status, at:r.vocAt, by:r.vocBy, note:(val==='approved'?TT('موافقة VOC','VOC approved'):TT('رفض VOC','VOC rejected'))+(r.vocNote?': '+r.vocNote:'')});
+  const tag = isVoc(r) ? 'VOC' : 'SWAP';
+  r.statusHistory.push({s:r.status, at:r.vocAt, by:r.vocBy, note:(val==='approved'?TT(`موافقة المدير على ${tag}`,`${tag} approved by admin`):TT(`رفض المدير ${tag}`,`${tag} rejected by admin`))+(r.vocNote?': '+r.vocNote:'')});
   saveRepairs();
   logAudit('swap_voc', 'admin', currentActorName(), `${r.jobNo||''} — ${val==='approved'?TT('موافقة VOC','VOC approved'):TT('رفض VOC','VOC rejected')} (${r.swapDays} ${TT('يوم من التفعيل','days from activation')})${r.vocNote?' — '+r.vocNote:''}`);
   render();
 }
 function vocActionButtons(r){
-  if(authRole!=='admin' || !isVoc(r) || isClosedStatus(r.status)) return '';
+  if(authRole!=='admin' || !swapNeedsApproval(r) || isClosedStatus(r.status)) return '';
   const st = r.vocStatus||'pending';
-  return `${st!=='approved'?`<button class="btn btn-sm btn-primary" onclick="setVocStatus('${r.id}','approved')">${icon('check')} ${TT('موافقة VOC','Approve VOC')}</button>`:''}${st==='pending'?`<button class="btn btn-sm" onclick="setVocStatus('${r.id}','rejected')">${TT('رفض VOC','Reject VOC')}</button>`:''}`;
+  const tag = isVoc(r) ? 'VOC' : 'SWAP';
+  return `${st!=='approved'?`<button class="btn btn-sm btn-primary" onclick="setVocStatus('${r.id}','approved')">${icon('check')} ${TT('موافقة '+tag,'Approve '+tag)}</button>`:''}${st==='pending'?`<button class="btn btn-sm" onclick="setVocStatus('${r.id}','rejected')">${TT('رفض '+tag,'Reject '+tag)}</button>`:''}`;
 }
-function pendingVocCount(){ return visibleRepairs().filter(r=>isVoc(r) && (r.vocStatus||'pending')==='pending' && !isClosedStatus(r.status)).length; }
+function pendingVocCount(){ return visibleRepairs().filter(r=>swapNeedsApproval(r) && (r.vocStatus||'pending')==='pending' && !isClosedStatus(r.status)).length; }
+
+/* ---------- SWAP form: hide repair-only fields, replacement device vs money compensation ---------- */
+function toggleSwapFields(){
+  const st = document.getElementById('f_serviceType');
+  const swap = !!st && st.value===SERVICE_TYPES[1];
+  const box = document.getElementById('swapFields'); if(box) box.style.display = swap ? 'block' : 'none';
+  const rep = document.getElementById('repairOnlyBox'); if(rep) rep.style.display = swap ? 'none' : 'block';
+  setSwapResolution((document.getElementById('f_swapResolution')||{}).value||'device');
+}
+function setSwapResolution(v){
+  const h = document.getElementById('f_swapResolution'); if(!h) return;
+  h.value = v;
+  document.querySelectorAll('#swapResToggle button').forEach(b=>b.classList.toggle('btn-primary', b.dataset.r===v));
+  const refund = v==='refund';
+  const rb = document.getElementById('swapRefundBox'); if(rb) rb.style.display = refund ? 'grid' : 'none';
+  document.querySelectorAll('#swapFields .swap-dev-only').forEach(el=>{ el.style.display = refund ? 'none' : ''; });
+}
+function isRefundSwap(r){ return isSwapRepair(r) && r.swapResolution==='refund'; }
+function swapResolved(r){ return isRefundSwap(r) ? (Number(r.refundAmount)||0)>0 : !!r.newImei; }
 
 /* ---------- login screen Drive box ---------- */
 function loginDriveBox(){
@@ -5826,13 +5908,60 @@ function listsMigrate(){
   return res;
 }
 
-/* ---------- fault picker (reception) ---------- */
+/* ---------- fault picker (reception): faults grouped by category ---------- */
+const FAULT_CATS = [
+  {k:'screen', n:['الشاشة واللمس','Screen & touch']},
+  {k:'power',  n:['الباور والشحن والبطارية','Power, charging & battery']},
+  {k:'sound',  n:['الصوت','Sound']},
+  {k:'camera', n:['الكاميرات','Cameras']},
+  {k:'network',n:['الشبكة والاتصال','Network & connectivity']},
+  {k:'buttons',n:['الأزرار والبصمة','Buttons & fingerprint']},
+  {k:'body',   n:['الكفرات والهيكل','Covers & housing']},
+  {k:'software',n:['السوفتوير والنظام','Software & system']},
+  {k:'other',  n:['أخرى','Other']},
+];
+const FAULT_CAT_BY_NAME = {
+  'الشاشة مكسورة':'screen','الشاشة لا تعرض / سوداء':'screen','خطوط أو بقع بالشاشة':'screen','اللمس لا يعمل':'screen',
+  'لا يشتغل نهائياً':'power','لا يشحن':'power','الشحن بطيء أو متقطع':'power','البطارية تفرغ بسرعة':'power','البطارية منفوخة':'power','يطفي ويشتغل لوحده':'power','زر الباور':'power',
+  'السماعة الداخلية (المكالمات)':'sound','السماعة الخارجية (الصوت)':'sound','المايك (الطرف الثاني ما يسمع)':'sound',
+  'الكاميرا الخلفية':'camera','الكاميرا الأمامية':'camera','زجاج الكاميرا مكسور':'camera',
+  'لا توجد شبكة / إشارة ضعيفة':'network','الواي فاي أو البلوتوث':'network','لا يقرأ الشريحة':'network',
+  'البصمة لا تعمل':'buttons','أزرار الصوت':'buttons','الهزاز':'buttons',
+  'الغطاء الخلفي مكسور':'body','الهيكل / الإطار متضرر':'body',
+  'معلق على الشعار':'software','مشكلة سوفتوير / تحديث':'software','قفل حساب Google (FRP)':'software',
+  'الجهاز يسخن':'other','تعرض للماء':'other',
+};
+const FAULT_CAT_BY_PART = {'شاشة':'screen','فليكس شاشة':'screen','بطارية':'power','منفذ / بورد الشحن':'power','زر باور / فليكس':'power','سماعة داخلية':'sound','سماعة خارجية':'sound','مايك':'sound','كاميرا خلفية':'camera','كاميرا أمامية':'camera','زجاج كاميرا':'camera','درج الشريحة':'network','بصمة':'buttons','أزرار الصوت':'buttons','هزاز':'buttons','غطاء خلفي':'body','فريم / هيكل':'body'};
+function faultCat(f){ return (f.c && FAULT_CATS.some(c=>c.k===f.c)) ? f.c : (FAULT_CAT_BY_NAME[f.n] || FAULT_CAT_BY_PART[f.p] || 'other'); }
+function catLabel(c){ return c.n[lang==='ar'?0:1]; }
 function faultChipsHtml(selected){
-  return `<div class="chips" id="faultChips">${faultList().map((f,i)=>`<label class="chip ${selected.includes(f.n)?'on':''}"><input type="checkbox" value="${f.n}" data-i="${i}" ${selected.includes(f.n)?'checked':''} onchange="onFaultChange(this)">${f.n}</label>`).join('')}</div>`;
+  const list = faultList();
+  const groups = FAULT_CATS.map(c=>({c, items: list.map((f,i)=>({f,i})).filter(x=>faultCat(x.f)===c.k)})).filter(g=>g.items.length);
+  const tabs = groups.map(g=>{ const n = g.items.filter(x=>selected.includes(x.f.n)).length;
+    return `<button type="button" class="fault-cat ${n?'has':''}" data-cat="${g.c.k}" onclick="toggleFaultCat('${g.c.k}')">${catLabel(g.c)}<span class="fault-cat-n" ${n?'':'hidden'}>${n}</span><span class="fault-cat-arrow">▾</span></button>`; }).join('');
+  const panels = groups.map(g=>`<div class="fault-panel chips" data-cat="${g.c.k}" hidden>${g.items.map(({f,i})=>`<label class="chip ${selected.includes(f.n)?'on':''}"><input type="checkbox" value="${f.n}" data-i="${i}" ${selected.includes(f.n)?'checked':''} onchange="onFaultChange(this)">${f.n}</label>`).join('')}</div>`).join('');
+  return `<div id="faultChips" class="fault-picker"><div class="fault-cats">${tabs}</div>${panels}<div id="faultSelected" class="fault-selected">${faultSelectedHtml(selected)}</div></div>`;
+}
+function faultSelectedHtml(sel){
+  return sel.length ? `${TT('العطل المختار:','Selected:')} ${sel.map(n=>`<span class="fault-tag">${n}</span>`).join(' ')}` : `<span style="color:var(--muted);">${TT('اختار التصنيف، بعدين اختار العطل من داخله.','Pick a category, then the fault inside it.')}</span>`;
+}
+function toggleFaultCat(k){
+  document.querySelectorAll('#faultChips .fault-panel').forEach(p=>{ p.hidden = p.dataset.cat!==k ? true : !p.hidden; });
+  document.querySelectorAll('#faultChips .fault-cat').forEach(b=>{ const p = document.querySelector(`#faultChips .fault-panel[data-cat="${b.dataset.cat}"]`); b.classList.toggle('open', !!p && !p.hidden); });
+}
+function refreshFaultCounts(){
+  const sel = selectedFaults();
+  document.querySelectorAll('#faultChips .fault-cat').forEach(b=>{
+    const n = [...document.querySelectorAll(`#faultChips .fault-panel[data-cat="${b.dataset.cat}"] input:checked`)].length;
+    const badge = b.querySelector('.fault-cat-n'); if(badge){ badge.textContent = n; badge.hidden = !n; }
+    b.classList.toggle('has', n>0);
+  });
+  const box = document.getElementById('faultSelected'); if(box) box.innerHTML = faultSelectedHtml(sel);
 }
 function selectedFaults(){ return [...document.querySelectorAll('#faultChips input:checked')].map(i=>i.value); }
 function onFaultChange(el){
   if(el && el.parentElement) el.parentElement.classList.toggle('on', el.checked);
+  refreshFaultCounts();
   // suggest the repair type from the faults until the technician sets it himself
   const rt = document.getElementById('f_repairType');
   if(rt && rt.dataset.manual!=='1'){
