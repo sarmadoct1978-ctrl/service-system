@@ -2644,9 +2644,9 @@ function triggerPrint(pageSize){
     document.head.appendChild(styleEl);
   }
   if(pageSize==='A5'){
-    styleEl.textContent = '@media print{ @page{ size:A5; margin:8mm; } }';
+    styleEl.textContent = '@media print{ @page{ size:A5; margin:0; } #printArea{ padding:8mm !important; box-sizing:border-box; } }';
   }else{
-    styleEl.textContent = '@media print{ @page{ size:A4; margin:14mm; } }';
+    styleEl.textContent = '@media print{ @page{ size:A4; margin:0; } #printArea{ padding:14mm !important; box-sizing:border-box; } }';
   }
   const oldTitle = document.title;
   document.title = '';
