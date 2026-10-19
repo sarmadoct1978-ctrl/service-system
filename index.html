@@ -4168,6 +4168,10 @@ async function loadAll(){
   const m19 = v19Migrate();
   if(m19.repairs) needsRepairSave = true;
   if(m19.inventory) needsInventorySave = true;
+  // invoices left behind by jobs deleted before this rule existed
+  { const deadJobs = deadSet('repairs');
+    const orphans = state.invoices.filter(i=>i.repairId && deadJobs.has(i.repairId) && !state.repairs.some(r=>r.id===i.repairId));
+    if(orphans.length){ state.invoices = state.invoices.filter(i=>!orphans.includes(i)); needsInvoiceSave = true; } }
   const mL = listsMigrate();
   if(mL.inventory) needsInventorySave = true;
   if(mL.catalog) saveDeviceCatalog();
@@ -4475,6 +4479,13 @@ function deleteRepair(id){
     : T('confirmDeleteDevice') + TT('\n(القطع المصروفة للجوب ترجع لمخزن الفرع)','\n(parts issued to the job go back to the branch stock)');
   if(!confirm(msg)) return;
   if(!delivered) applyJobStock(r, {deleted:true});
+  // the job's invoice goes with it, so revenue never counts a job that no longer exists
+  const jobInvoices = state.invoices.filter(i=>i.repairId===r.id || i.id===r.invoiceId);
+  if(jobInvoices.length){
+    state.invoices = state.invoices.filter(i=>!jobInvoices.includes(i));
+    jobInvoices.forEach(i=>logAudit('invoice_delete', authRole, currentActorName(), `${T('auditInvoiceDeleted')}: ${i.customerName} — ${money(i.total)} ${T('currency')} (${TT('مع حذف الجوب','with the deleted job')} ${r.jobNo||''})`));
+    saveInvoices();
+  }
   state.repairs = state.repairs.filter(x=>x.id!==id);
   logAudit('repair_delete', authRole, currentActorName(), `${T('auditDeviceDeleted')}: ${deviceLabel(r)} (${r.jobNo||r.id.slice(-6)}) — ${r.customerName}${delivered?TT(' — مسلّم، القطع ما رجعت للمخزن',' — delivered, parts not returned'):''}`);
   saveRepairs();
