@@ -496,6 +496,7 @@ details.hist table{margin-top:6px;}
 .link-btn{background:none;border:none;padding:0;color:var(--violet-dark,#4646d8);cursor:pointer;font:inherit;text-decoration:underline;text-underline-offset:2px;}
 .tech-chip{display:inline-flex;align-items:center;gap:6px;}
 .chips{display:flex;flex-wrap:wrap;gap:6px;}
+.item-row input.price{min-width:110px;}
 .warranty-toggle{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .warranty-toggle .btn{justify-content:center;white-space:normal;line-height:1.35;padding:10px 12px;}
 @media (max-width:560px){.warranty-toggle{grid-template-columns:1fr;}}
@@ -2246,7 +2247,7 @@ function renderInvoiceItems(){
     <div class="item-row">
       <input placeholder="${T('itemDescPh')}" value="${it.desc}" oninput="invoiceDraftItems[${idx}].desc=this.value">
       <input class="qty" type="number" placeholder="${T('itemQtyPh')}" value="${it.qty}" oninput="invoiceDraftItems[${idx}].qty=Number(this.value)||0;updateInvTotal()">
-      <input class="price" type="number" placeholder="${T('itemPricePh')}" value="${it.price}" oninput="invoiceDraftItems[${idx}].price=Number(this.value)||0;updateInvTotal()">
+      <input class="price" type="text" inputmode="numeric" placeholder="${T('itemPricePh')}" value="${it.price?money(it.price):''}" oninput="invoiceDraftItems[${idx}].price=parseIQD(this.value);updateInvTotal()" onblur="this.value=fmtIQDInput(this.value)">
       <button class="btn btn-sm btn-danger" onclick="removeInvoiceItem(${idx})">${icon('del')}</button>
     </div>
   `).join('');
@@ -4821,7 +4822,7 @@ function openRepairModal(id){
     <div id="warrantyInfo"></div>
     <div id="costBox" class="cost-box" style="display:${out?'block':'none'};">
       <div class="form-2col">
-        <div class="form-row"><label>${TT('أجور اليد','Labour cost')}</label><input id="f_labor" type="number" min="0" value="${editing?(editing.laborCost||0):0}" oninput="updateCostBox()"></div>
+        <div class="form-row"><label>${TT('أجور اليد','Labour cost')}</label><input id="f_labor" type="text" inputmode="numeric" value="${editing&&editing.laborCost?money(editing.laborCost):''}" placeholder="0" oninput="updateCostBox()" onblur="this.value=fmtIQDInput(this.value);updateCostBox()"></div>
         <div class="form-row"><label>${TT('موافقة الزبون على الكلفة','Customer approval')}</label>
           <select id="f_quote">
             <option value="pending" ${(!editing||!editing.quoteStatus||editing.quoteStatus==='pending')?'selected':''}>${TT('بانتظار رد الزبون','Waiting for customer')}</option>
@@ -4952,7 +4953,7 @@ function updateCostBox(){
   const w = document.getElementById('f_warranty'); if(!w) return;
   const out = w.value===WARRANTY_STATUSES[1];
   const box = document.getElementById('costBox'); if(box) box.style.display = out ? 'block' : 'none';
-  const labor = Number((document.getElementById('f_labor')||{}).value)||0;
+  const labor = parseIQD((document.getElementById('f_labor')||{}).value);
   const parts = modalPartsTotal();
   const set = (id,v)=>{ const e = document.getElementById(id); if(e) e.textContent = money(v); };
   set('partsTotal', parts); set('laborShow', labor); set('costTotal', labor+parts);
@@ -5029,7 +5030,7 @@ async function saveRepair(id){
   const activationDate = g('f_activationDate');
   const warrantyMonths = Number(g('f_warrantyMonths'))||0;
   const out = warrantyStatus===WARRANTY_STATUSES[1];
-  const laborCost = out ? (Number(g('f_labor'))||0) : 0;
+  const laborCost = out ? parseIQD(g('f_labor')) : 0;
   let quoteStatus = out ? (g('f_quote')||'pending') : '';
   if(!customerName || !deviceModel){ alert(T('alertNameModel')); return; }
   if(!WARRANTY_STATUSES.includes(warrantyStatus)){ alert(TT('اختار حالة الضمان: «ضمن الضمان» أو «خارج الضمان».','Choose the warranty status: in warranty or out of warranty.')); return; }
@@ -5254,8 +5255,8 @@ function savePart(id){
   const model = ((document.getElementById('p_model')||{}).value||'').trim();
   const qty = Number(document.getElementById('p_qty').value)||0;
   const threshold = Number(document.getElementById('p_threshold').value)||0;
-  const costPrice = Number(document.getElementById('p_cost').value)||0;
-  const sellPrice = Number(document.getElementById('p_sell').value)||0;
+  const costPrice = parseIQD(document.getElementById('p_cost').value);
+  const sellPrice = parseIQD(document.getElementById('p_sell').value);
   if(!partType){ alert(TT('اختار نوع القطعة','Choose the part type')); return; }
   if(!name) name = [partType, brand, model].filter(Boolean).join(' ');
   if(qty<0){ alert(T('alertTransferQty')); return; }
@@ -5436,7 +5437,7 @@ function claimFee(kind){ const f = (serviceLists && serviceLists.claimFees) || {
 function setClaimFee(kind, val){
   if(authRole!=='admin') return;
   ensureServiceLists();
-  serviceLists.claimFees = { ...(serviceLists.claimFees||{}), [kind]: Math.max(0, Number(val)||0) };
+  serviceLists.claimFees = { ...(serviceLists.claimFees||{}), [kind]: parseIQD(val) };
   queueSave('serviceLists');
   logAudit('warranty_claim', authRole, currentActorName(), `${TT('أجور الخدمة الافتراضية','Default service fee')} ${claimKindLabel(kind)}: ${money(serviceLists.claimFees[kind])}`);
   render();
@@ -5446,7 +5447,7 @@ function claimKindLabel(k){ return (CLAIM_KIND[k]||['',''])[lang==='ar'?0:1]; }
 function setClaimLabor(id, val){
   if(authRole!=='admin') return;
   const r = state.repairs.find(x=>x.id===id); if(!r) return;
-  const v = Math.max(0, Number(val)||0);
+  const v = parseIQD(val);
   r.claimLabor = v;
   saveRepairs();
   logAudit('warranty_claim', authRole, currentActorName(), `${r.jobNo||''}: ${TT('أجور المطالبة','Claim labour')} ${money(v)}`);
@@ -5468,7 +5469,7 @@ function renderClaims(){
     ${authRole==='admin'?`<div class="panel" style="padding:12px 14px;margin-bottom:12px;">
       <div style="font-weight:600;margin-bottom:8px;">${TT('أجور الخدمة (Service fees) الافتراضية لكل جوب','Default service fee per job')}</div>
       <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;">
-        ${['part','software','swap'].map(k=>`<label style="display:flex;align-items:center;gap:6px;margin:0;">${claimKindLabel(k)} <input type="number" min="0" value="${claimFee(k)}" style="width:110px;" onchange="setClaimFee('${k}', this.value)"></label>`).join('')}
+        ${['part','software','swap'].map(k=>`<label style="display:flex;align-items:center;gap:6px;margin:0;">${claimKindLabel(k)} <input type="text" inputmode="numeric" value="${claimFee(k)?money(claimFee(k)):''}" style="width:110px;" onchange="setClaimFee('${k}', this.value)"></label>`).join('')}
       </div>
       <div style="font-size:11.5px;color:var(--muted);margin-top:6px;">${TT('تنطبق على كل جوب ما معدّل أجوره يدوياً. بالـ SWAP الجهاز البديل من الشركة، فتنحسب أجور الخدمة بس.','Applies to every job without a manual fee. For SWAP the replacement comes from the company, so only the service fee counts.')}</div>
     </div>`:''}
@@ -5492,7 +5493,7 @@ function renderClaims(){
           <td class="mono" style="font-size:12px;">${x.r.imei||'-'}${x.r.newImei?`<div>→ ${x.r.newImei}</div>`:''}</td>
           <td><span class="status-badge ${x.kind==='swap'?'badge-swap':(x.kind==='software'?'badge-quote-pending':'badge-branch')}">${claimKindLabel(x.kind)}</span></td>
           <td style="font-size:12.5px;">${x.lines.map(l=>`${l.name} ×${l.qty}`).join('، ')||(x.kind==='software'?(softwareOpsLabel(x.r.softwareOps)||TT('بدون قطع','No parts')):'-')}${x.kind==='swap'?`<div style="font-size:11px;color:var(--muted);">${TT('الجهاز البديل من الشركة — ما ينحسب','Replacement from the company — not counted')}</div>`:''}</td>
-          <td>${authRole==='admin'?`<input type="number" min="0" value="${x.labor}" style="width:90px;${x.custom?'':'color:var(--muted);'}" title="${x.custom?TT('معدّلة يدوياً','Set manually'):TT('الأجور الافتراضية','Default fee')}" onchange="setClaimLabor('${x.r.id}', this.value)">`:`<span class="mono">${money(x.labor)}</span>`}</td>
+          <td>${authRole==='admin'?`<input type="text" inputmode="numeric" value="${x.labor?money(x.labor):''}" placeholder="0" style="width:90px;${x.custom?'':'color:var(--muted);'}" title="${x.custom?TT('معدّلة يدوياً','Set manually'):TT('الأجور الافتراضية','Default fee')}" onchange="setClaimLabor('${x.r.id}', this.value)">`:`<span class="mono">${money(x.labor)}</span>`}</td>
           <td class="mono">${money(x.value)}</td>
           <td>${authRole==='admin'?`<select onchange="setClaimStatus('${x.r.id}', this.value)">${Object.keys(CLAIM_LABELS).map(k=>`<option value="${k}" ${(x.r.claimStatus||'')===k?'selected':''}>${CLAIM_LABELS[k][lang==='ar'?0:1]}</option>`).join('')}</select>`:CLAIM_LABELS[x.r.claimStatus||''][lang==='ar'?0:1]}</td>
         </tr>`).join('')}</tbody></table>`:emptyState(TT('ما في مطالبات','No claims'), TT('الجوبات داخل الضمان اللي خلصت (قطع، سوفتوير، SWAP) راح تظهر هنا.','Completed in-warranty jobs (parts, software, SWAP) will appear here.'))}
@@ -5848,6 +5849,14 @@ const BRAND_ALIASES = {
   apple:['apple','iphone','ايفون','آيفون','ابل'],
   huawei:['huawei','هواوي'], honor:['honor','هونر','هونور'], nokia:['nokia','نوكيا'], realme:['realme','ريلمي'], oppo:['oppo','اوبو'], vivo:['vivo','فيفو'],
 };
+// Iraqi dinar amounts: no decimals. Accepts 15000, 15,000, 15.000, ١٥٠٠٠ and 1.250.000 — all as whole dinars.
+function parseIQD(v){
+  let s = latinDigits(v).replace(/[٬،,\s]/g,'').replace(/٫/g,'.');
+  if(/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g,'');
+  const n = parseFloat(s);
+  return isFinite(n) && n>0 ? Math.round(n) : 0;
+}
+function fmtIQDInput(v){ const n = parseIQD(v); return n ? money(n) : ''; }
 function latinDigits(x){ return String(x||'').replace(/[٠-٩]/g, d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[۰-۹]/g, d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d)); }
 function normBrand(b){
   const x = latinDigits(b).toLowerCase().trim().replace(/\s+/g,' ');
@@ -5981,8 +5990,8 @@ function openPartModal(id){
       <div class="form-row"><label>${T('lowStockThreshold')}</label><input id="p_threshold" type="number" value="${editing?editing.threshold:3}"></div>
     </div>
     <div class="form-2col">
-      <div class="form-row"><label>${T('buyPrice')}</label><input id="p_cost" type="number" value="${editing?editing.costPrice:''}"></div>
-      <div class="form-row"><label>${T('sellPrice')}</label><input id="p_sell" type="number" value="${editing?editing.sellPrice:''}"></div>
+      <div class="form-row"><label>${T('buyPrice')}</label><input id="p_cost" type="text" inputmode="numeric" class="money-in" onblur="this.value=fmtIQDInput(this.value)" value="${editing&&editing.costPrice?money(editing.costPrice):''}"></div>
+      <div class="form-row"><label>${T('sellPrice')}</label><input id="p_sell" type="text" inputmode="numeric" class="money-in" onblur="this.value=fmtIQDInput(this.value)" value="${editing&&editing.sellPrice?money(editing.sellPrice):''}"></div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-primary" onclick="savePart(${editing?`'${id}'`:'null'})">${T('save')}</button>
