@@ -1172,10 +1172,11 @@ function slugify(name){
 const DEFAULT_BRANCHES = [
   {name:'SVC-ERB-1', username:'erb1', password:'1234'},
   {name:'SVC-BGH-2', username:'bgh2', password:'1234'},
-  {name:'SVC-SUL-3', username:'sul3', password:'1234'},
-  {name:'SVC-MUS-4', username:'mus4', password:'1234'},
-  {name:'SVC-BSR-5', username:'bsr5', password:'1234'},
+  {name:'SVC-MUS-3', username:'mus3', password:'1234'},
+  {name:'SVC-NJF-4', username:'njf4', password:'1234'},
+  {name:'SVC-SUL-5', username:'sul5', password:'1234'},
   {name:'SVC-SEM-6', username:'sem6', password:'1234'},
+  {name:'SVC-BSR-7', username:'bsr7', password:'1234'},
 ];
 
 function uid(){ return 't' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
@@ -3890,6 +3891,7 @@ function renderSyncBar(){
    v1.9 — SECURITY
    ===================================================================== */
 // Removes characters that could turn stored text into HTML/script when it is shown on screen.
+const BRANCH_PLAN = [['SVC-ERB-1','erb1'],['SVC-BGH-2','bgh2'],['SVC-MUS-3','mus3'],['SVC-NJF-4','njf4'],['SVC-SUL-5','sul5'],['SVC-SEM-6','sem6'],['SVC-BSR-7','bsr7']];
 function cleanText(s){
   return String(s)
     .replace(/[<>"`]/g, ch=>({'<':'‹','>':'›','"':'”','`':'ʹ'})[ch])
@@ -4178,6 +4180,21 @@ async function loadAll(){
 
   let needsBranchSave = false, needsRepairSave = false, needsInvoiceSave = false, needsInventorySave = false;
   if(!state.branches.length){ state.branches = DEFAULT_BRANCHES.map(b=>({id:uid(), ...b})); needsBranchSave = true; }
+  // Oct 2026 branch plan: names and order as the company uses them. Runs once; existing branches are renamed by
+  // their city code (MUS, SUL, BSR...) so their jobs, staff and logins stay attached.
+  // only on fresh Drive data (or a stand-alone offline copy), so two devices never each create the same branch
+  if(!serviceLists.branchPlan && (driveReady || backendMode()==='offline')){
+    const code = nm=>{ const p = String(nm||'').toUpperCase().split('-'); return p.length>=2 ? p[1] : ''; };
+    const plan = BRANCH_PLAN.map(([name, username])=>{
+      let b = state.branches.find(x=>code(x.name)===code(name));
+      if(b){ if(b.name!==name){ b.name = name; needsBranchSave = true; } }
+      else{ b = {id:uid(), name, username, password:'1234', staff:[]}; state.branches.push(b); needsBranchSave = true; }
+      return b;
+    });
+    const order = [...plan, ...state.branches.filter(b=>!plan.includes(b))];
+    if(order.some((b,i)=>state.branches[i]!==b)){ state.branches = order; needsBranchSave = true; }
+    serviceLists.branchPlan = 1; queueSave('serviceLists');
+  }
   const usedUsernames = new Set();
   state.branches.forEach(b=>{
     if(b.passwordHash && b.password!==undefined){ delete b.password; needsBranchSave = true; }
