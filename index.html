@@ -1836,7 +1836,7 @@ function importDevicesExcel(evt){
           // a delivered job without a delivery date is dated on its intake day, not today, so today's figures stay right
           deliveredAt: stNew===ST.DELIV ? (deliveredIn || createdAt) : null,
           cancelledAt: stNew===CANCELLED_STATUS ? (deliveredIn || createdAt) : undefined, cancelReason: stNew===CANCELLED_STATUS ? cancelReason : undefined,
-          imported: true // old jobs from Excel: kept out of the warranty-claims list (they were claimed outside the system)
+          imported: true // old jobs from Excel: in claims the part comes from the fault (no stock movement, cost not recorded)
         });
         added++;
       }
@@ -5553,11 +5553,17 @@ let claimBrand = '';
 let claimFilter = '';
 const CLAIM_LABELS = {'':['لم تتم المطالبة','Not claimed'], claimed:['تمت المطالبة','Claimed'], paid:['تم التعويض','Reimbursed'], rejected:['رفضت المطالبة','Rejected']};
 function claimRows(){
-  return visibleRepairs().filter(r=>!r.imported && !isOutWarranty(r) && [ST.DONE, ST.READY, ST.DELIV].includes(r.status)).map(r=>{
+  return visibleRepairs().filter(r=>!isOutWarranty(r) && [ST.DONE, ST.READY, ST.DELIV].includes(r.status)).map(r=>{
     const ded = jobDeducted(r);
-    const lines = Object.entries(ded).filter(([,q])=>q>0).map(([invId,q])=>{ const it = state.inventory.find(x=>x.id===invId); return {name: it?it.name:invId, qty:q, cost: it?(Number(it.costPrice)||0):0}; });
+    let lines = Object.entries(ded).filter(([,q])=>q>0).map(([invId,q])=>{ const it = state.inventory.find(x=>x.id===invId); return {name: it?it.name:invId, qty:q, cost: it?(Number(it.costPrice)||0):0}; });
+    let kind = isSwapRepair(r) ? 'swap' : (lines.length ? 'part' : (r.repairType==='software' ? 'software' : ''));
+    // jobs imported from the old Excel sheets have no stock movements: the fault tells the part (or software)
+    if(r.imported && !kind){
+      const fault = String(r.issue||'').split(' — ')[0].trim();
+      kind = /soft|سوفت|برمج/i.test(fault) ? 'software' : 'part';
+      if(kind==='part') lines = [{name: fault || TT('قطعة','Part'), qty:1, cost:0, old:true}];
+    }
     const partsValue = lines.reduce((s,l)=>s+l.qty*l.cost,0);
-    const kind = isSwapRepair(r) ? 'swap' : (lines.length ? 'part' : (r.repairType==='software' ? 'software' : ''));
     const custom = r.claimLabor!==undefined && r.claimLabor!==null && r.claimLabor!=='';
     const labor = custom ? (Number(r.claimLabor)||0) : claimFee(kind);
     // SWAP: the replacement device comes from the company, so only the service fee is claimed
@@ -5626,7 +5632,7 @@ function renderClaims(){
           <td>${branchName(x.r.branchId)}</td><td>${deviceLabel(x.r)}${isSwapRepair(x.r)?' <span class="status-badge badge-swap">SWAP</span>':''}</td>
           <td class="mono" style="font-size:12px;">${x.r.imei||'-'}${x.r.newImei?`<div>→ ${x.r.newImei}</div>`:''}</td>
           <td><span class="status-badge ${x.kind==='swap'?'badge-swap':(x.kind==='software'?'badge-quote-pending':'badge-branch')}">${claimKindLabel(x.kind)}</span></td>
-          <td style="font-size:12.5px;">${x.lines.map(l=>`${l.name} ×${l.qty}`).join('، ')||(x.kind==='software'?(softwareOpsLabel(x.r.softwareOps)||TT('بدون قطع','No parts')):'-')}${x.kind==='swap'?(x.r.swapResolution==='refund'?`<div style="font-size:11.5px;font-weight:600;">${TT('تعويض مالي للزبون:','Money compensation:')} ${money(x.r.refundAmount||0)}</div>`:`<div style="font-size:11px;color:var(--muted);">${TT('الجهاز البديل من الشركة — ما ينحسب','Replacement from the company — not counted')}</div>`):''}</td>
+          <td style="font-size:12.5px;">${x.r.imported?`<span class="status-badge badge-branch" title="${TT('من ملف الإكسل القديم — القطعة من العطل وسعرها غير مسجل','From the old Excel file — part taken from the fault, cost not recorded')}">Excel</span> `:''}${x.lines.map(l=>`${l.name} ×${l.qty}`).join('، ')||(x.kind==='software'?(softwareOpsLabel(x.r.softwareOps)||TT('بدون قطع','No parts')):'-')}${x.kind==='swap'?(x.r.swapResolution==='refund'?`<div style="font-size:11.5px;font-weight:600;">${TT('تعويض مالي للزبون:','Money compensation:')} ${money(x.r.refundAmount||0)}</div>`:`<div style="font-size:11px;color:var(--muted);">${TT('الجهاز البديل من الشركة — ما ينحسب','Replacement from the company — not counted')}</div>`):''}</td>
           <td>${authRole==='admin'?`<input type="text" inputmode="numeric" value="${x.labor?money(x.labor):''}" placeholder="0" style="width:90px;${x.custom?'':'color:var(--muted);'}" title="${x.custom?TT('معدّلة يدوياً','Set manually'):TT('الأجور الافتراضية','Default fee')}" onchange="setClaimLabor('${x.r.id}', this.value)">`:`<span class="mono">${money(x.labor)}</span>`}</td>
           <td class="mono">${money(x.value)}</td>
           <td>${authRole==='admin'?`<select onchange="setClaimStatus('${x.r.id}', this.value)">${Object.keys(CLAIM_LABELS).map(k=>`<option value="${k}" ${(x.r.claimStatus||'')===k?'selected':''}>${CLAIM_LABELS[k][lang==='ar'?0:1]}</option>`).join('')}</select>`:CLAIM_LABELS[x.r.claimStatus||''][lang==='ar'?0:1]}</td>
