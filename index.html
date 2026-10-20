@@ -1362,7 +1362,7 @@ function renderInner(){
 
   const navList = document.getElementById('navList');
   const readyCount = visibleRepairs().filter(r=>r.status==='انتظار استلام الزبون').length;
-  const pendingSwaps = visibleRepairs().filter(r=>isSwapRepair(r) && !r.newImei && r.status!==CANCELLED_STATUS).length;
+  const pendingSwaps = visibleRepairs().filter(r=>isSwapRepair(r) && !r.newImei && !isClosedStatus(r.status) && !(typeof isRefundSwap==='function' && isRefundSwap(r))).length;
   const pendingIncomingTransfers = authRole==='warehouse'
     ? state.transfers.filter(t=>(t.status==='pending' && t.fromBranchId===MAIN_WH_ID) || (t.status==='in_transit' && t.toBranchId===MAIN_WH_ID)).length
     : authRole==='branch'
@@ -1799,7 +1799,7 @@ function importDevicesExcel(evt){
           if(deviceModel) upd.deviceModel = deviceModel;
           if(deviceBrand) upd.deviceBrand = deviceBrand;
           if(imei) upd.imei = imei;
-          if(newImei){ upd.newImei = newImei; if(!existing.swapDate) upd.swapDate = new Date().toISOString(); }
+          if(newImei){ upd.newImei = newImei; if(!existing.swapDate) upd.swapDate = existing.deliveredAt || existing.createdAt || new Date().toISOString(); }
           if(issue) upd.issue = issue;
           if(technician) upd.technician = technician;
           if(status && status!==existing.status){ upd.status = status; upd.statusHistory = [...(existing.statusHistory||[]), {s:status, at:new Date().toISOString(), by:currentActorName(), note:'Excel'}]; }
@@ -1969,9 +1969,11 @@ function handleImportInventory(evt){
         const code = String(pick(row, ['كود الصنف','كود القطعة','الكود','Item Code','Code','code'])).trim();
         const brand = String(pick(row, ['الماركة','العلامة التجارية','Brand','brand'])).trim();
         const qty = Number(pick(row, ['الكمية','Qty','Quantity','quantity'])) || 0;
-        const costPrice = Number(pick(row, ['سعر الشراء','Buy Price','CostPrice','Cost Price'])) || 0;
-        const sellPrice = Number(pick(row, ['سعر البيع','Sell Price','SellPrice'])) || 0;
+        const costPrice = parseIQD(pick(row, ['سعر الشراء','Buy Price','CostPrice','Cost Price'])) || 0;
+        const sellPrice = parseIQD(pick(row, ['سعر البيع','Sell Price','SellPrice'])) || 0;
         const threshold = Number(pick(row, ['حد التنبيه','Threshold','Low Stock Threshold'])) || 3;
+        const partType = String(pick(row, ['نوع القطعة','النوع','Part Type','Type'])).trim() || (typeof inferPartType==='function' ? (inferPartType(name)||'') : '');
+        const model = String(pick(row, ['الموديل','Model','model'])).trim();
 
         let branchId = defaultBranchId;
         if(authRole==='admin'){
@@ -1990,9 +1992,11 @@ function handleImportInventory(evt){
           if(costPrice) existing.costPrice = costPrice;
           if(sellPrice) existing.sellPrice = sellPrice;
           if(threshold) existing.threshold = threshold;
+          if(partType) existing.partType = partType;
+          if(model) existing.model = model;
           updated++;
         }else{
-          newStockItem({branchId, code, name, brand, threshold, costPrice, sellPrice}, qty, 'import');
+          newStockItem({branchId, code, name, brand, partType, model, threshold, costPrice, sellPrice}, qty, 'import');
           added++;
         }
       });
@@ -4510,6 +4514,22 @@ function advanceStatus(id){
   const to = (r.status===ST.DIAG && r.repairType==='software') ? ST.DONE : NEXT_STATUS[r.status];
   if(to) changeRepairStatus(r, to);
 }
+// Admin only: take a stuck job out of the open list whatever its state, with a written reason
+function forceCloseRepair(id){
+  if(authRole!=='admin') return;
+  const r = state.repairs.find(x=>x.id===id);
+  if(!r || isClosedStatus(r.status)) return;
+  const reason = (prompt(TT('إخراج إجباري (المدير فقط): الجوب يصير «تم التسليم» بدون فحص الشروط.\nاكتب السبب (إجباري):','Force close (admin only): the job becomes "Delivered" without the usual checks.\nWrite the reason (required):'), '')||'').trim();
+  if(!reason){ if(reason!==null) alert(TT('لازم تكتب السبب.','A reason is required.')); return; }
+  const from = r.status;
+  const plan = planJobStock({...r, status:ST.DELIV});
+  pushStatus(r, ST.DELIV, TT('إخراج إجباري: ','Force closed: ') + reason);
+  r.forceClosed = {by: currentActorName(), at: r.updatedAt, reason};
+  if(!plan.short.length) applyJobStock(r);       // parts short in stock: close anyway, stock is left as it is
+  saveRepairs();
+  logAudit('repair_status', authRole, currentActorName(), `${TT('إخراج إجباري','Force close')}: ${deviceLabel(r)} (${r.jobNo||''}) ${DL(from)} → ${DL(ST.DELIV)} — ${reason}`);
+  render();
+}
 function cancelRepair(id){
   const r = state.repairs.find(x=>x.id===id);
   if(!r || isClosedStatus(r.status)) return;
@@ -4826,6 +4846,7 @@ function ticketCard(r, compact){
         <div class="ticket-price">${money(r.estCost)} ${T('currency')}${(out && (r.laborCost||(r.partsUsed||[]).length))?`<div style="font-size:11px;color:var(--muted);font-weight:500;">${TT('يد','labour')} ${money(r.laborCost||0)} + ${TT('قطع','parts')} ${money((r.partsUsed||[]).reduce((s,p)=>s+(Number(p.price)||0)*p.qty,0))}</div>`:''}${r.estCost>0?`<div class="${r.paid?'paid':'unpaid'}" style="font-size:11.5px;margin-top:3px;">${r.invoiceId?T('invoicedLabel'):(r.paid?T('paid'):T('unpaid'))}</div>`:''}</div>
       </div>
       <div class="ticket-issue">${r.issue}</div>
+      ${r.forceClosed?`<div class="cancel-note" style="background:#fff4e5;color:#8a4b00;">${TT('أُخرج إجبارياً بواسطة','Force closed by')} ${r.forceClosed.by||''} — ${r.forceClosed.reason||''}</div>`:''}
       ${isCancelled?`<div class="cancel-note">${T('cancelledOn')} ${r.cancelledAt?fmtDate(r.cancelledAt):''}${r.cancelReason?' — '+T('cancelReasonLabel')+' '+r.cancelReason:''}</div>`:''}
       ${(!compact && (r.softwareOps||[]).length) ? `<div class="ticket-meta">${TT('السوفتوير:','Software:')} ${softwareOpsLabel(r.softwareOps)}</div>` : ''}
       ${(!compact && r.partsUsed && r.partsUsed.length) ? `<div class="ticket-meta">${T('partsUsedLabel')} ${r.partsUsed.map(p=>p.name+' ×'+p.qty).join('، ')}</div>` : ''}
@@ -4843,6 +4864,7 @@ function ticketCard(r, compact){
         ${(authRole==='branch' && canOperate && [ST.DIAG, ST.PARTS, ST.REPAIR].includes(r.status))?`<button class="btn btn-sm" onclick="requestPartForJob('${r.id}')">${icon('transfer')} ${TT('طلب قطعة','Request part')}</button>`:''}
         ${(canOperate && !isClosedStatus(r.status))?`<button class="btn btn-sm btn-danger" onclick="cancelRepair('${r.id}')">${T('cancelJobBtn')}</button>`:''}
         ${(canOperate && isCancelled)?`<button class="btn btn-sm" onclick="reactivateRepair('${r.id}')">${T('reactivateJobBtn')}</button>`:''}
+        ${(authRole==='admin' && !isClosedStatus(r.status))?`<button class="btn btn-sm" style="border-color:var(--red);color:var(--red);" title="${TT('للمدير فقط: يطلع الجوب بأي حال مع كتابة السبب','Admin only: close the job whatever its state, with a reason')}" onclick="forceCloseRepair('${r.id}')">${TT('إخراج إجباري','Force close')}</button>`:''}
         ${(r.estCost>0 && !r.paid && !r.invoiceId)?`<button class="btn btn-sm" onclick="markRepairPaid('${r.id}')">${icon('check')} ${T('markPaidBtn')}</button>`:''}
         ${(r.estCost>0 && r.paid && !r.invoiceId)?`<button class="btn btn-sm" onclick="markRepairUnpaid('${r.id}')">${T('unpaid')}</button>`:''}
         ${canOperate?`<button class="btn btn-sm" onclick="openRepairModal('${r.id}')">${icon('edit')} ${T('edit')}</button>`:''}
@@ -5093,27 +5115,29 @@ function renderModalParts(){
   }
   updateCostBox();
 }
-function addModalPart(){
-  const sel = document.getElementById('partSelect'); if(!sel || !sel.value){ alert(TT('اختار القطعة من القائمة','Choose the part from the list')); return; }
-  const invId = sel.value;
-  const qty = Number(document.getElementById('partQty').value) || 0;
-  if(qty<=0) return;
+function addModalPart(byId){
+  const sel = document.getElementById('partSelect');
+  if(!byId && (!sel || !sel.value)){ alert(TT('اختار القطعة من القائمة أو اكتب كودها','Choose the part from the list or type its code')); return false; }
+  const invId = byId || sel.value;
+  const qty = byId ? 1 : (Number(document.getElementById('partQty').value) || 0);
+  if(qty<=0) return false;
   const inv = state.inventory.find(p=>p.id===invId);
-  if(!inv) return;
+  if(!inv) return false;
   // one piece of each part per job: no two screens, two boards, or the same part twice
   const dup = duplicatePartError([...modalPartsUsed, {invId, name:inv.name, qty}]);
-  if(dup){ alert(dup); return; }
+  if(dup){ alert(dup); return false; }
   const editing = modalCtx.id ? state.repairs.find(r=>r.id===modalCtx.id) : null;
   const already = editing ? (jobDeducted(editing)[invId]||0) : 0;
   const existing = modalPartsUsed.find(p=>p.invId===invId);
   const wantTotal = (existing?existing.qty:0) + qty;
   if(wantTotal - already > (Number(inv.qty)||0)){
     alert(TT(`الكمية المتوفرة من «${inv.name}» هي ${inv.qty} بس. اطلب الباقي من المخزن الرئيسي.`, `Only ${inv.qty} of "${inv.name}" in stock. Request the rest from the main warehouse.`));
-    return;
+    return false;
   }
   if(existing) existing.qty += qty;
   else modalPartsUsed.push({invId, code:inv.code, name:inv.name, qty, price:0}); // price is typed per job — it changes every time
   renderModalParts();
+  return true;
 }
 function removeModalPart(idx){ modalPartsUsed.splice(idx,1); renderModalParts(); }
 function isModalOutWarranty(){ const w = document.getElementById('f_warranty'); return !!w && w.value===WARRANTY_STATUSES[1]; }
@@ -5551,6 +5575,7 @@ function confirmIssueStock(){
 /* ---------- warranty claims (in-warranty cost to recover from the brand / distributor) ---------- */
 let claimBrand = '';
 let claimFilter = '';
+let claimSource = '';
 const CLAIM_LABELS = {'':['لم تتم المطالبة','Not claimed'], claimed:['تمت المطالبة','Claimed'], paid:['تم التعويض','Reimbursed'], rejected:['رفضت المطالبة','Rejected']};
 function claimRows(){
   return visibleRepairs().filter(r=>!isOutWarranty(r) && [ST.DONE, ST.READY, ST.DELIV].includes(r.status)).map(r=>{
@@ -5598,6 +5623,8 @@ function renderClaims(){
   const brands = [...new Set(rows.map(x=>x.r.deviceBrand||T('unknownBrand')))].sort();
   if(claimBrand) rows = rows.filter(x=>(x.r.deviceBrand||T('unknownBrand'))===claimBrand);
   if(claimFilter!=='') rows = rows.filter(x=>(x.r.claimStatus||'')===(claimFilter==='none'?'':claimFilter));
+  if(claimSource) rows = rows.filter(x=>claimSource==='old' ? !!x.r.imported : !x.r.imported);
+  claimShownIds = rows.map(x=>x.r.id);
   rows.sort((a,b)=>new Date(b.r.createdAt)-new Date(a.r.createdAt));
   const sumBy = st=>rows.filter(x=>(x.r.claimStatus||'')===st).reduce((s,x)=>s+x.value,0);
   return `
@@ -5620,7 +5647,13 @@ function renderClaims(){
         <option value="none" ${claimFilter==='none'?'selected':''}>${CLAIM_LABELS[''][lang==='ar'?0:1]}</option>
         ${['claimed','paid','rejected'].map(k=>`<option value="${k}" ${claimFilter===k?'selected':''}>${CLAIM_LABELS[k][lang==='ar'?0:1]}</option>`).join('')}
       </select>
+      <select id="claimSource" onchange="claimSource=this.value;render();">
+        <option value="" ${claimSource===''?'selected':''}>${TT('كل الجوبات','All jobs')}</option>
+        <option value="new" ${claimSource==='new'?'selected':''}>${TT('جوبات السيستم','System jobs')}</option>
+        <option value="old" ${claimSource==='old'?'selected':''}>${TT('الداتا القديمة (Excel)','Old data (Excel)')}</option>
+      </select>
       <div style="flex:1;"></div>
+      ${authRole==='admin'?`<button class="btn" onclick="bulkClaimStatus()">${icon('check')} ${TT('تعليم المعروض: تمت المطالبة','Mark shown as claimed')}</button>`:''}
       <button class="btn btn-primary" onclick="exportClaimsExcel()">${icon('receipt')} ${T('exportExcel')}</button>
     </div>
     <p style="font-size:12px;color:var(--muted);margin:-6px 0 12px;">${TT('كل الجوبات داخل الضمان اللي خلصت: تبديل قطعة (القطع بسعر الشراء + أجور الخدمة)، سوفتوير (أجور الخدمة)، SWAP (أجور الخدمة بس، الجهاز من الشركة). سجّل حالة المطالبة لكل جوب.','All completed in-warranty jobs: part replacement (parts at cost + service fee), software (service fee), SWAP (service fee only, device from the company). Record the claim status for each job.')}</p>
@@ -5638,6 +5671,19 @@ function renderClaims(){
           <td>${authRole==='admin'?`<select onchange="setClaimStatus('${x.r.id}', this.value)">${Object.keys(CLAIM_LABELS).map(k=>`<option value="${k}" ${(x.r.claimStatus||'')===k?'selected':''}>${CLAIM_LABELS[k][lang==='ar'?0:1]}</option>`).join('')}</select>`:CLAIM_LABELS[x.r.claimStatus||''][lang==='ar'?0:1]}</td>
         </tr>`).join('')}</tbody></table>`:emptyState(TT('ما في مطالبات','No claims'), TT('الجوبات داخل الضمان اللي خلصت (قطع، سوفتوير، SWAP) راح تظهر هنا.','Completed in-warranty jobs (parts, software, SWAP) will appear here.'))}
     </div>`;
+}
+let claimShownIds = [];
+// marks every job currently shown (after the filters) that has no claim status yet
+function bulkClaimStatus(){
+  if(authRole!=='admin') return;
+  const todo = state.repairs.filter(r=>claimShownIds.includes(r.id) && !r.claimStatus);
+  if(!todo.length){ alert(TT('ما في جوبات بدون حالة مطالبة بالقائمة المعروضة.','No jobs without a claim status in the list shown.')); return; }
+  if(!confirm(TT(`تعليم ${todo.length} جوب كـ «تمت المطالبة»؟`, `Mark ${todo.length} jobs as claimed?`))) return;
+  const at = new Date().toISOString();
+  todo.forEach(r=>{ r.claimStatus = 'claimed'; r.claimAt = at; });
+  saveRepairs();
+  logAudit('warranty_claim', authRole, currentActorName(), TT(`تعليم ${todo.length} جوب: تمت المطالبة`, `${todo.length} jobs marked claimed`));
+  render();
 }
 function setClaimStatus(id, val){
   if(authRole!=='admin') return;
@@ -5922,6 +5968,23 @@ const DEFAULT_FAULTS = [
 ];
 const DEFAULT_PART_TYPES = ['شاشة','بطارية','منفذ / بورد الشحن','كاميرا خلفية','كاميرا أمامية','زجاج كاميرا','سماعة داخلية','سماعة خارجية','مايك','بصمة','زر باور / فليكس','أزرار الصوت','هزاز','درج الشريحة','غطاء خلفي','فريم / هيكل','فليكس شاشة','بوردة رئيسية','جهاز كامل (بديل)','أخرى'];
 const OTHER_FAULT = 'أخرى (اكتب بالملاحظة)';
+// English names, so reception and technicians find faults and parts in either language
+const EN_NAMES = {
+  'لا يشتغل نهائياً':'Dead / no power','لا يشحن':'Not charging','الشحن بطيء أو متقطع':'Slow or intermittent charging','البطارية تفرغ بسرعة':'Battery drains fast','البطارية منفوخة':'Swollen battery',
+  'الشاشة مكسورة':'Broken screen','الشاشة لا تعرض / سوداء':'No display / black screen','خطوط أو بقع بالشاشة':'Lines or spots on screen','اللمس لا يعمل':'Touch not working',
+  'الجهاز يسخن':'Overheating','يطفي ويشتغل لوحده':'Restarts by itself','معلق على الشعار':'Stuck on logo','مشكلة سوفتوير / تحديث':'Software / update issue','قفل حساب Google (FRP)':'Google account lock (FRP)',
+  'الكاميرا الخلفية':'Rear camera','الكاميرا الأمامية':'Front camera','زجاج الكاميرا مكسور':'Camera glass broken',
+  'السماعة الداخلية (المكالمات)':'Earpiece (calls)','السماعة الخارجية (الصوت)':'Loudspeaker','المايك (الطرف الثاني ما يسمع)':'Microphone',
+  'لا توجد شبكة / إشارة ضعيفة':'No network / weak signal','الواي فاي أو البلوتوث':'Wi-Fi or Bluetooth','لا يقرأ الشريحة':'SIM not detected',
+  'البصمة لا تعمل':'Fingerprint not working','زر الباور':'Power button','أزرار الصوت':'Volume buttons','الهزاز':'Vibrator',
+  'تعرض للماء':'Water damage','الغطاء الخلفي مكسور':'Back cover broken','الهيكل / الإطار متضرر':'Frame / housing damaged','أخرى (اكتب بالملاحظة)':'Other (write in notes)',
+  'شاشة':'Screen / LCD','بطارية':'Battery','منفذ / بورد الشحن':'Charging port / sub-board','كاميرا خلفية':'Rear camera','كاميرا أمامية':'Front camera','زجاج كاميرا':'Camera glass',
+  'سماعة داخلية':'Earpiece','سماعة خارجية':'Loudspeaker','مايك':'Microphone','بصمة':'Fingerprint sensor','زر باور / فليكس':'Power button / flex','هزاز':'Vibrator',
+  'درج الشريحة':'SIM tray','غطاء خلفي':'Back cover','فريم / هيكل':'Frame / housing','فليكس شاشة':'Display flex','بوردة رئيسية':'Mainboard (PCBA)','جهاز كامل (بديل)':'Whole device (replacement)','أخرى':'Other',
+};
+function enName(ar){ return EN_NAMES[String(ar||'').trim()] || ''; }
+// "عربي · English" whatever the interface language; names the admin added without a translation stay as they are
+function biName(ar){ const en = enName(ar); return en ? `${ar} · ${en}` : String(ar||''); }
 let serviceLists = null;
 function faultList(){ return (serviceLists && Array.isArray(serviceLists.faults) && serviceLists.faults.length) ? serviceLists.faults : DEFAULT_FAULTS; }
 function partTypeList(){ return (serviceLists && Array.isArray(serviceLists.partTypes) && serviceLists.partTypes.length) ? serviceLists.partTypes : DEFAULT_PART_TYPES; }
@@ -5987,12 +6050,12 @@ function faultChipsHtml(selected){
   const list = faultList();
   const groups = FAULT_CATS.map(c=>({c, items: list.map((f,i)=>({f,i})).filter(x=>faultCat(x.f)===c.k)})).filter(g=>g.items.length);
   const tabs = groups.map(g=>{ const n = g.items.filter(x=>selected.includes(x.f.n)).length;
-    return `<button type="button" class="fault-cat ${n?'has':''}" data-cat="${g.c.k}" onclick="toggleFaultCat('${g.c.k}')">${catLabel(g.c)}<span class="fault-cat-n" ${n?'':'hidden'}>${n}</span><span class="fault-cat-arrow">▾</span></button>`; }).join('');
-  const panels = groups.map(g=>`<div class="fault-panel chips" data-cat="${g.c.k}" hidden>${g.items.map(({f,i})=>`<label class="chip ${selected.includes(f.n)?'on':''}"><input type="checkbox" value="${f.n}" data-i="${i}" ${selected.includes(f.n)?'checked':''} onchange="onFaultChange(this)">${f.n}</label>`).join('')}</div>`).join('');
+    return `<button type="button" class="fault-cat ${n?'has':''}" data-cat="${g.c.k}" onclick="toggleFaultCat('${g.c.k}')">${g.c.n[0]} · ${g.c.n[1]}<span class="fault-cat-n" ${n?'':'hidden'}>${n}</span><span class="fault-cat-arrow">▾</span></button>`; }).join('');
+  const panels = groups.map(g=>`<div class="fault-panel chips" data-cat="${g.c.k}" hidden>${g.items.map(({f,i})=>`<label class="chip ${selected.includes(f.n)?'on':''}"><input type="checkbox" value="${f.n}" data-i="${i}" ${selected.includes(f.n)?'checked':''} onchange="onFaultChange(this)">${biName(f.n)}</label>`).join('')}</div>`).join('');
   return `<div id="faultChips" class="fault-picker"><div class="fault-cats">${tabs}</div>${panels}<div id="faultSelected" class="fault-selected">${faultSelectedHtml(selected)}</div></div>`;
 }
 function faultSelectedHtml(sel){
-  return sel.length ? `${TT('العطل المختار:','Selected:')} ${sel.map(n=>`<span class="fault-tag">${n}</span>`).join(' ')}` : `<span style="color:var(--muted);">${TT('اختار التصنيف، بعدين اختار العطل من داخله.','Pick a category, then the fault inside it.')}</span>`;
+  return sel.length ? `${TT('العطل المختار:','Selected:')} ${sel.map(n=>`<span class="fault-tag">${biName(n)}</span>`).join(' ')}` : `<span style="color:var(--muted);">${TT('اختار التصنيف، بعدين اختار العطل من داخله.','Pick a category, then the fault inside it.')}</span>`;
 }
 function toggleFaultCat(k){
   document.querySelectorAll('#faultChips .fault-panel').forEach(p=>{ p.hidden = p.dataset.cat!==k ? true : !p.hidden; });
@@ -6041,8 +6104,13 @@ function softwareOpsLabel(list){ return (list||[]).join('، '); }
 function partPickerHtml(){
   return `<div id="partPickRow">
       <div style="display:grid;grid-template-columns:minmax(150px,1fr) 2fr;gap:8px;margin-bottom:8px;">
-        <select id="partType" onchange="refreshPartSelect()"><option value="">${TT('— كل أنواع القطع —','— All part types —')}</option><option value="${SW_TYPE}">${TT('سوفتوير (بدون قطعة)','Software (no part)')}</option>${partTypeList().map(t=>`<option value="${t}">${t}</option>`).join('')}</select>
+        <select id="partType" onchange="refreshPartSelect()"><option value="">${TT('— كل أنواع القطع —','— All part types —')}</option><option value="${SW_TYPE}">${TT('سوفتوير (بدون قطعة)','Software (no part)')}</option>${partTypeList().map(t=>`<option value="${t}">${biName(t)}</option>`).join('')}</select>
         <select id="partSelect"></select>
+      </div>
+      <div class="item-row" style="gap:6px;margin-bottom:6px;">
+        <input id="partCode" list="partCodeList" placeholder="${TT('أو اكتب كود القطعة… / or type the part code…','Or type the part code… / أو اكتب كود القطعة…')}" style="flex:1;min-width:0;" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();addPartByCode();}">
+        <datalist id="partCodeList"></datalist>
+        <button type="button" class="btn btn-sm" onclick="addPartByCode()">${icon('plus')} ${TT('إضافة بالكود','Add by code')}</button>
       </div>
       <div class="item-row" style="justify-content:flex-end;">
         <label style="font-size:12.5px;color:var(--muted);margin:0;">${T('qty')}</label>
@@ -6125,7 +6193,7 @@ function partOptionsHtml(branchId, type, brand, model){
     const f = partFit(p, type, brand, model);
     if(f==='exact') exact.push(p); else if(f==='general') general.push(p);
   }
-  const opt = p=>`<option value="${p.id}" ${(Number(p.qty)||0)<=0?'disabled':''}>${p.name}${p.model?'':' ('+TT('عام','generic')+')'} — ${T('available')}: ${p.qty}${p.code?' · '+p.code:''}</option>`;
+  const opt = p=>`<option value="${p.id}" ${(Number(p.qty)||0)<=0?'disabled':''}>${p.name}${enName(partTypeOf(p)) && !String(p.name).toLowerCase().includes(enName(partTypeOf(p)).split(' ')[0].toLowerCase())?' · '+enName(partTypeOf(p)):''}${p.model?'':' ('+TT('عام','generic')+')'} — ${T('available')}: ${p.qty}${p.code?' · '+p.code:''}</option>`;
   let html = '';
   if(exact.length) html += `<optgroup label="${TT('مطابقة للجهاز','Matches this device')}: ${[brand,model].filter(Boolean).join(' ')}">${exact.map(opt).join('')}</optgroup>`;
   if(general.length) html += `<optgroup label="${exact.length?TT('قطع عامة / بدون موديل محدد','Generic parts / no model set'):TT('القطع المتوفرة','Available parts')}">${general.map(opt).join('')}</optgroup>`;
@@ -6157,7 +6225,7 @@ function refreshPartSelect(){
   const type = (document.getElementById('partType')||{}).value||'';
   const qtyEl = document.getElementById('partQty');
   if(type===SW_TYPE){
-    ps.innerHTML = `<option value="">${TT('— اختار شنو انسوى —','— Choose what was done —')}</option>` + SOFTWARE_OPS.map(o=>`<option value="${o[0]}">${lang==='ar'?o[0]:o[1]}</option>`).join('');
+    ps.innerHTML = `<option value="">${TT('— اختار شنو انسوى —','— Choose what was done —')}</option>` + SOFTWARE_OPS.map(o=>`<option value="${o[0]}">${o[0]} · ${o[1]}</option>`).join('');
     if(qtyEl){ qtyEl.value = 1; qtyEl.disabled = true; }
     const hint = document.getElementById('partPickHint');
     if(hint) hint.innerHTML = TT('سوفتوير ما يصرف قطعة من المخزن. اختار نوع السوفتوير ودوس «إضافة».','Software uses no stock. Choose the software work and press "Add".');
@@ -6167,6 +6235,7 @@ function refreshPartSelect(){
   const brand = (document.getElementById('f_deviceBrand')||{}).value||'';
   const model = (document.getElementById('f_deviceModel')||{}).value||'';
   ps.innerHTML = partOptionsHtml(modalCtx.branchId, type, brand, model);
+  fillPartCodeList();
   const hint = document.getElementById('partPickHint');
   const any = !!ps.querySelector('option:not([disabled])');
   if(hint) hint.innerHTML = any ? '' : `<span style="color:var(--red);">${TT('ما في قطعة مطابقة متوفرة بمخزن الفرع لهذا الجهاز','No matching part in this branch for this device')}${type?' ('+type+')':''}.</span><br><span style="color:var(--text);">${partPickDiagnosis(modalCtx.branchId, type, brand, model)}</span>`;
@@ -6187,6 +6256,31 @@ function duplicatePartError(lines){
     }
   }
   return null;
+}
+// codes of this branch's parts in stock, suggested while typing in the code box
+function fillPartCodeList(){
+  const dl = document.getElementById('partCodeList'); if(!dl) return;
+  const items = state.inventory.filter(p=>p.branchId===modalCtx.branchId && !p.defective && p.code && (Number(p.qty)||0)>0);
+  dl.innerHTML = items.map(p=>`<option value="${p.code}">${p.name} — ${T('available')}: ${p.qty}</option>`).join('');
+}
+// add a part straight from its stock code, without choosing type or name from the lists
+function addPartByCode(){
+  const el = document.getElementById('partCode'); if(!el) return;
+  const code = String(el.value||'').trim(); if(!code){ el.focus(); return; }
+  const norm = c=>String(c||'').trim().toUpperCase().replace(/\s+/g,'');
+  const pool = state.inventory.filter(p=>!p.defective && norm(p.code)===norm(code));
+  const here = pool.find(p=>p.branchId===modalCtx.branchId);
+  if(!here){
+    const other = pool.filter(p=>(Number(p.qty)||0)>0);
+    alert(other.length
+      ? TT(`الكود «${code}» موجود بس مو بمخزن هذا الفرع (متوفر في: ${[...new Set(other.map(p=>p.branchId===MAIN_WH_ID?T('mainWarehouse'):branchName(p.branchId)))].join('، ')}). حوّله لمخزن الفرع أولاً.`, `Code "${code}" exists but not in this branch (in stock at: ${[...new Set(other.map(p=>p.branchId===MAIN_WH_ID?T('mainWarehouse'):branchName(p.branchId)))].join(', ')}). Transfer it to this branch first.`)
+      : TT(`ما في قطعة بالكود «${code}». تأكد من الكود بصفحة المخزن.`, `No part with code "${code}". Check the code in Inventory.`));
+    return;
+  }
+  const brand = (document.getElementById('f_deviceBrand')||{}).value||'';
+  const model = (document.getElementById('f_deviceModel')||{}).value||'';
+  if(!partFit(here, '', brand, model) && !confirm(TT(`«${here.name}» مسجلة لجهاز ثاني (${[here.brand, here.model].filter(Boolean).join(' ')||'-'}) والجهاز ${[brand, model].filter(Boolean).join(' ')}. تضيفها رغم هذا؟`, `"${here.name}" is registered for another device (${[here.brand, here.model].filter(Boolean).join(' ')||'-'}) but this job is ${[brand, model].filter(Boolean).join(' ')}. Add it anyway?`))) return;
+  if(addModalPart(here.id)){ el.value = ''; const rt = document.getElementById('f_repairType'); if(rt){ rt.value = 'part'; rt.dataset.manual = '1'; } }
 }
 function addPickedItem(){
   const type = (document.getElementById('partType')||{}).value||'';
