@@ -501,6 +501,12 @@ details.hist table{margin-top:6px;}
 .tech-chip{display:inline-flex;align-items:center;gap:6px;}
 .chips{display:flex;flex-wrap:wrap;gap:6px;}
 .item-row input.price{min-width:110px;}
+.date-range{display:flex;align-items:center;gap:6px;background:var(--bg,#f4f5f7);border:1px solid var(--border,#e5e7eb);border-radius:999px;padding:4px 10px;font-size:12.5px;color:var(--muted);}
+.date-range.on{border-color:var(--violet,#6366f1);background:#eef0ff;color:var(--violet-dark,#4338ca);font-weight:600;}
+.date-range input[type=date]{border:none;background:transparent;padding:2px 0;font-size:12.5px;width:auto;min-height:0;color:inherit;font-family:inherit;}
+.date-clear{border:none;background:var(--violet,#6366f1);color:#fff;border-radius:50%;width:20px;height:20px;line-height:20px;padding:0;font-size:11px;cursor:pointer;}
+@media (max-width:900px){ .date-range span{display:none;} }
+.board-box{border:1px dashed var(--border,#e5e7eb);border-radius:10px;padding:10px 12px;margin:10px 0 6px;background:#fafbff;}
 .tickets{gap:6px !important;}
 .tickets .ticket{padding:8px 12px;gap:4px;}
 .tickets .ticket-top{gap:8px;}
@@ -1255,11 +1261,33 @@ function setBranch(id){
   render();
 }
 
+function inDateRange(iso){
+  if(!state.dateFrom && !state.dateTo) return true;
+  if(!iso) return false;
+  const d = localDayStr(iso);
+  return (!state.dateFrom || d>=state.dateFrom) && (!state.dateTo || d<=state.dateTo);
+}
+function localDayStr(iso){ const d = new Date(iso); if(isNaN(d)) return ''; return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function visibleRepairs(){
-  return state.currentBranch==='all' ? state.repairs : state.repairs.filter(r=>r.branchId===state.currentBranch);
+  const list = state.currentBranch==='all' ? state.repairs : state.repairs.filter(r=>r.branchId===state.currentBranch);
+  return (state.dateFrom || state.dateTo) ? list.filter(r=>inDateRange(r.createdAt)) : list;
 }
 function visibleInvoices(){
-  return state.currentBranch==='all' ? state.invoices : state.invoices.filter(i=>i.branchId===state.currentBranch);
+  const list = state.currentBranch==='all' ? state.invoices : state.invoices.filter(i=>i.branchId===state.currentBranch);
+  return (state.dateFrom || state.dateTo) ? list.filter(i=>inDateRange(i.createdAt)) : list;
+}
+function setDateRange(from, to){
+  if(from && to && from>to){ const t = from; from = to; to = t; }
+  state.dateFrom = from || ''; state.dateTo = to || '';
+  render();
+}
+function dateRangeHtml(){
+  const on = state.dateFrom || state.dateTo;
+  return `<div class="date-range ${on?'on':''}" title="${TT('يفلتر الجوبات حسب تاريخ الاستلام والفواتير حسب تاريخها، بكل الصفحات','Filters jobs by intake date and invoices by date, on every page')}">
+    <span>${TT('من','From')}</span><input type="date" id="dateFrom" value="${state.dateFrom||''}">
+    <span>${TT('إلى','To')}</span><input type="date" id="dateTo" value="${state.dateTo||''}">
+    ${on?`<button type="button" class="date-clear" id="dateClear" title="${TT('إلغاء فلتر التاريخ','Clear date filter')}">✕</button>`:''}
+  </div>`;
 }
 function visibleInventory(){
   return state.currentBranch==='all' ? state.inventory : state.inventory.filter(p=>p.branchId===state.currentBranch);
@@ -1440,7 +1468,7 @@ function renderInner(){
           ${state.branches.map(b=>`<option value="${b.id}" ${state.currentBranch===b.id?'selected':''}>${b.name}</option>`).join('')}
         </select>
         ` : `<span class="branch-chip">${icon('branch')} ${authRole==='admin'?T('adminModeLabel'):branchName(state.authBranchId)}</span>`}
-        <span class="date-chip">${dateStr}</span>
+        ${['branches','audit'].includes(state.page) ? `<span class="date-chip">${dateStr}</span>` : dateRangeHtml()}
         <div class="lang-switch">
           <button class="lang-btn ${lang==='ar'?'active':''}" id="langAr">AR</button>
           <button class="lang-btn ${lang==='en'?'active':''}" id="langEn">EN</button>
@@ -1454,6 +1482,10 @@ function renderInner(){
   document.getElementById('logoutBtn').onclick = logout;
   const branchSelectEl = document.getElementById('branchSelect');
   if(branchSelectEl) branchSelectEl.onchange = (e)=> setBranch(e.target.value);
+  { const df = document.getElementById('dateFrom'), dt = document.getElementById('dateTo'), dc = document.getElementById('dateClear');
+    if(df) df.onchange = ()=> setDateRange(df.value, dt ? dt.value : '');
+    if(dt) dt.onchange = ()=> setDateRange(df ? df.value : '', dt.value);
+    if(dc) dc.onclick = ()=> setDateRange('', ''); }
 
   const main = document.getElementById('pageContent');
   if(state.page==='dashboard') main.innerHTML = renderDashboard();
@@ -4289,6 +4321,12 @@ const ALLOWED_NEXT = {
 const NEXT_STATUS = {[ST.RECV]:ST.DIAG, [ST.DIAG]:ST.REPAIR, [ST.REPAIR]:ST.DONE, [ST.PARTS]:ST.REPAIR, [ST.DONE]:ST.READY, [ST.READY]:ST.DELIV};
 const REPEAT_DAYS = 30;
 // A job marked "part replacement" cannot be completed or delivered until a part is taken from stock.
+// board work on a repair job: 'replace' (new IMEI required) or 'repair'; a mainboard taken from stock counts as a replacement
+function boardActionOf(r){
+  if(!r || isSwapRepair(r)) return '';
+  if(r.boardAction) return r.boardAction;
+  return (r.partsUsed||[]).some(p=>{ const inv = state.inventory.find(x=>x.id===p.invId); return inv && partTypeOf(inv)==='بوردة رئيسية'; }) ? 'replace' : '';
+}
 function needsPartError(r){
   if(!r || isSwapRepair(r)) return null;
   if(isOutWarranty(r) && r.quoteStatus==='rejected') return null; // returned to the customer without repair
@@ -4484,6 +4522,10 @@ function checkStatusChange(r, to){
   if(swapNeedsApproval(r) && r.vocStatus!=='approved' && [ST.REPAIR, ST.PARTS, ST.DONE, ST.READY, ST.DELIV].includes(to)){
     const m = vocBlockMsg(r) + (r.vocStatus==='rejected' ? TT('\nالمدير رفض الطلب.','\nThe admin rejected it.') : '');
     if(authRole==='admin') add(m + TT('\nتكمل كمدير بدون تسجيل الموافقة؟','\nContinue as admin without recording approval?')); else return {error: m};
+  }
+  if([ST.DONE, ST.READY, ST.DELIV].includes(to) && boardActionOf(r)==='replace' && !String(r.newImei||'').trim()){
+    const m = TT('البوردة الرئيسية تبدّلت: لازم تكتب الـ IMEI الجديد بالجوب قبل ما يكمل. افتح الجوب ← قسم «البوردة الرئيسية» ← IMEI الجديد.\nإذا البورد تصلّح بس وما تبدّل، اختار «تصليح البورد».','The mainboard was replaced: enter the new IMEI on the job before completing it (open the job → Mainboard → New IMEI).\nIf the board was only repaired, choose "Board repair".');
+    if(authRole==='admin') add(m + TT('\nتكمل كمدير بدون IMEI جديد؟','\nContinue as admin without the new IMEI?')); else return {error: m};
   }
   if([ST.DONE, ST.READY, ST.DELIV].includes(to) && !String(r.imei||'').trim()) return {error: TT('الجوب ما يطلع بدون IMEI الجهاز. افتح الجوب واكتب الـ IMEI (من *#06# أو كارتونة الجهاز) قبل ما تكمله.','A job cannot be completed or delivered without the device IMEI. Open the job and enter the IMEI (from *#06# or the box) first.')};
   if([ST.DONE, ST.READY, ST.DELIV].includes(to) && isRefundSwap(r) && !((Number(r.refundAmount)||0)>0)) return {error: TT('السواب بتعويض مالي: سجّل مبلغ التعويض بالجوب قبل ما تكمله.','Money-compensation SWAP: record the compensation amount before completing the job.')};
@@ -4836,8 +4878,8 @@ function ticketCard(r, compact){
     <div class="ticket st-${stIdx+1}">
       <div class="ticket-top">
         <div>
-          <div class="ticket-device">${deviceLabel(r)} <span class="status-badge status-${stIdx+1}">${DL(r.status)}</span>${isSwapRepair(r)?`<span class="status-badge badge-swap">SWAP</span>`:''}${swapKindBadge(r)}${isRefundSwap(r)?`<span class="status-badge badge-quote-pending">${TT('تعويض مالي','Compensation')}${r.refundAmount?': '+money(r.refundAmount):''}</span>`:''}${r.warrantyStatus?`<span class="status-badge ${r.warrantyStatus==='ضمن الضمان'?'badge-warranty-in':'badge-warranty-out'}">${DL(r.warrantyStatus)}</span>`:''}${quoteBadge(r)}${(!isSwapRepair(r) && r.repairType)?`<span class="status-badge ${r.repairType==='part'?((r.partsUsed||[]).length?'badge-branch':'badge-quote-pending'):'badge-branch'}">${r.repairType==='part'?((r.partsUsed||[]).length?TT('تبديل قطعة','Part replacement'):TT('يحتاج قطعة — ما انصرفت بعد','Needs a part — not issued yet')):TT('سوفتوير','Software')}</span>`:''}${r.repeatOf?`<span class="status-badge badge-repeat" title="${TT('رجع خلال 30 يوم من الجوب','Returned within 30 days of job')} ${r.repeatOf}">${TT('راجع','Repeat')} ↺</span>`:''}${r.partArrivedAt && r.status===ST.PARTS?`<span class="status-badge badge-quote-ok">${TT('وصلت القطعة','Part arrived')} ✓</span>`:''}${r.branchId?`<span class="status-badge badge-branch">${branchName(r.branchId)}</span>`:''}</div>
-          <div class="ticket-meta">${r.jobNo?`<span class="mono" style="font-weight:600;color:var(--violet-dark);">${T('jobCardNo')}: ${r.jobNo}</span> · `:''}${r.imei?('IMEI: '+r.imei+' · '):''}${(isSwapRepair(r)&&r.newImei)?(T('newImeiShort')+': '+r.newImei+' · '):''}<button class="link-btn" onclick="openCustomerHistory('${r.id}')" title="${TT('سجل الزبون','Customer history')}">${r.customerName}</button>${visits?` <span style="font-size:11px;color:var(--muted);">(${TT('زيارات سابقة','previous visits')}: ${visits})</span>`:''} · ${r.phone} · ${T('receivedOn')} ${fmtDate(r.createdAt)}${r.deliveredAt?' · '+T('deliveredOn')+' '+fmtDate(r.deliveredAt):''} · ${T('jobAgeLabel')}: ${jobAgeDays(r)} ${T('daysLabel')}${r.technician?' · '+T('technicianLabel')+' '+r.technician:''}${(!out && expiry)?` · ${TT('الضمان لغاية','Warranty until')} ${fmtISODate(expiry)}`:''}</div>
+          <div class="ticket-device">${deviceLabel(r)} <span class="status-badge status-${stIdx+1}">${DL(r.status)}</span>${isSwapRepair(r)?`<span class="status-badge badge-swap">SWAP</span>`:''}${swapKindBadge(r)}${isRefundSwap(r)?`<span class="status-badge badge-quote-pending">${TT('تعويض مالي','Compensation')}${r.refundAmount?': '+money(r.refundAmount):''}</span>`:''}${r.warrantyStatus?`<span class="status-badge ${r.warrantyStatus==='ضمن الضمان'?'badge-warranty-in':'badge-warranty-out'}">${DL(r.warrantyStatus)}</span>`:''}${quoteBadge(r)}${(!isSwapRepair(r) && r.repairType)?`<span class="status-badge ${r.repairType==='part'?((r.partsUsed||[]).length?'badge-branch':'badge-quote-pending'):'badge-branch'}">${r.repairType==='part'?((r.partsUsed||[]).length?TT('تبديل قطعة','Part replacement'):TT('يحتاج قطعة — ما انصرفت بعد','Needs a part — not issued yet')):TT('سوفتوير','Software')}</span>`:''}${(!isSwapRepair(r) && boardActionOf(r))?`<span class="status-badge ${boardActionOf(r)==='replace'?(r.newImei?'badge-quote-ok':'badge-quote-pending'):'badge-branch'}">${boardActionOf(r)==='replace'?TT('تبديل بورد','Board replaced')+(r.newImei?'':' — '+TT('ينتظر IMEI جديد','needs new IMEI')):TT('تصليح بورد','Board repaired')}</span>`:''}${r.repeatOf?`<span class="status-badge badge-repeat" title="${TT('رجع خلال 30 يوم من الجوب','Returned within 30 days of job')} ${r.repeatOf}">${TT('راجع','Repeat')} ↺</span>`:''}${r.partArrivedAt && r.status===ST.PARTS?`<span class="status-badge badge-quote-ok">${TT('وصلت القطعة','Part arrived')} ✓</span>`:''}${r.branchId?`<span class="status-badge badge-branch">${branchName(r.branchId)}</span>`:''}</div>
+          <div class="ticket-meta">${r.jobNo?`<span class="mono" style="font-weight:600;color:var(--violet-dark);">${T('jobCardNo')}: ${r.jobNo}</span> · `:''}${r.imei?('IMEI: '+r.imei+' · '):''}${r.newImei?(T('newImeiShort')+': '+r.newImei+' · '):''}<button class="link-btn" onclick="openCustomerHistory('${r.id}')" title="${TT('سجل الزبون','Customer history')}">${r.customerName}</button>${visits?` <span style="font-size:11px;color:var(--muted);">(${TT('زيارات سابقة','previous visits')}: ${visits})</span>`:''} · ${r.phone} · ${T('receivedOn')} ${fmtDate(r.createdAt)}${r.deliveredAt?' · '+T('deliveredOn')+' '+fmtDate(r.deliveredAt):''} · ${T('jobAgeLabel')}: ${jobAgeDays(r)} ${T('daysLabel')}${r.technician?' · '+T('technicianLabel')+' '+r.technician:''}${(!out && expiry)?` · ${TT('الضمان لغاية','Warranty until')} ${fmtISODate(expiry)}`:''}</div>
           ${(r.photoBefore||r.photoAfter)?`<div class="ticket-photos">
             ${r.photoBefore?`<a href="${r.photoBefore}" target="_blank" rel="noopener" class="ticket-photo-link"><img src="${r.photoBefore}" class="ticket-photo-thumb"><span>${T('photoBefore')}</span></a>`:''}
             ${r.photoAfter?`<a href="${r.photoAfter}" target="_blank" rel="noopener" class="ticket-photo-link"><img src="${r.photoAfter}" class="ticket-photo-thumb"><span>${T('photoAfter')}</span></a>`:''}
@@ -5009,6 +5051,20 @@ function openRepairModal(id){
     <div class="form-row"><label>${TT('القطع أو السوفتوير المستخدم','Parts or software used')}</label>
       <div id="modalPartsList"></div>
       ${partPickerHtml()}
+      <div id="boardBox" class="board-box">
+        <div style="font-weight:600;font-size:13px;margin-bottom:6px;">${TT('البوردة الرئيسية · Mainboard','Mainboard · البوردة الرئيسية')}</div>
+        <input type="hidden" id="f_boardAction" value="${editing?boardActionOf(editing):''}">
+        <div class="warranty-toggle" id="boardToggle">
+          <button type="button" data-b="" class="btn btn-sm ${!(editing&&boardActionOf(editing))?'btn-primary':''}" onclick="setBoardAction('')">${TT('ما تخص البورد','Not the board')}</button>
+          <button type="button" data-b="repair" class="btn btn-sm ${editing&&boardActionOf(editing)==='repair'?'btn-primary':''}" onclick="setBoardAction('repair')">${TT('تصليح البورد · Board repair','Board repair · تصليح البورد')}</button>
+          <button type="button" data-b="replace" class="btn btn-sm ${editing&&boardActionOf(editing)==='replace'?'btn-primary':''}" onclick="setBoardAction('replace')">${TT('تبديل البورد · Board replacement','Board replacement · تبديل البورد')}</button>
+        </div>
+        <div id="boardImeiRow" style="display:${editing&&boardActionOf(editing)==='replace'?'block':'none'};margin-top:8px;">
+          <label style="font-size:12.5px;">${TT('IMEI الجديد (بعد تبديل البورد) · New IMEI','New IMEI (after board replacement) · IMEI الجديد')}</label>
+          <input id="f_boardImei" class="mono" value="${editing&&boardActionOf(editing)==='replace'?(editing.newImei||''):''}" maxlength="17" inputmode="numeric" placeholder="${TT('15 رقم — إجباري قبل ما يطلع الجوب','15 digits — required before the job is completed')}">
+        </div>
+        <div style="font-size:11.5px;color:var(--muted);margin-top:4px;">${TT('تبديل البورد يغيّر الـ IMEI، فلازم ينكتب الجديد قبل ما يكمل الجوب. تصليح البورد ما يحتاج IMEI جديد.','A board replacement changes the IMEI, so the new one is required before completion. A board repair keeps the IMEI.')}</div>
+      </div>
       <p style="font-size:11.5px;color:var(--muted);margin:4px 0 0;">${TT('القطعة تنصرف من المخزن أول ما تضيفها للجوب وتحفظ، وترجع للمخزن إذا انشالت أو انلغى الجوب. سعر القطعة تكتبه بيدك لكل جوب (خارج الضمان). إذا القطعة مو موجودة اطلبها من المخزن الرئيسي.','A part leaves stock as soon as you add it to the job and save, and returns if removed or the job is cancelled. Type the part price for each job (out of warranty). If a part is missing, request it from the main warehouse.')}</p>
     </div>
     </div>
@@ -5076,6 +5132,14 @@ function updateWarrantyInfo(userChanged){
     if(w){ setWarrantyChoice(valid ? WARRANTY_STATUSES[0] : WARRANTY_STATUSES[1]); }
   }
 }
+function setBoardAction(v){
+  const h = document.getElementById('f_boardAction'); if(!h) return;
+  h.value = v;
+  document.querySelectorAll('#boardToggle button').forEach(b=>b.classList.toggle('btn-primary', b.dataset.b===v));
+  const row = document.getElementById('boardImeiRow'); if(row) row.style.display = v==='replace' ? 'block' : 'none';
+  if(v==='replace'){ const i = document.getElementById('f_boardImei'); if(i) setTimeout(()=>i.focus(), 0); }
+}
+function modalHasBoardPart(){ return modalPartsUsed.some(p=>{ const inv = state.inventory.find(x=>x.id===p.invId); return inv && partTypeOf(inv)==='بوردة رئيسية'; }); }
 function setWarrantyChoice(v){
   const w = document.getElementById('f_warranty'); if(!w) return;
   w.value = v;
@@ -5137,6 +5201,7 @@ function addModalPart(byId){
   if(existing) existing.qty += qty;
   else modalPartsUsed.push({invId, code:inv.code, name:inv.name, qty, price:0}); // price is typed per job — it changes every time
   renderModalParts();
+  if(partTypeOf(inv)==='بوردة رئيسية') setBoardAction('replace');      // a new board from stock = new IMEI
   return true;
 }
 function removeModalPart(idx){ modalPartsUsed.splice(idx,1); renderModalParts(); }
@@ -5167,7 +5232,13 @@ async function saveRepair(id){
   const swap = serviceType===SERVICE_TYPES[1];
   const swapResolution = swap ? (g('f_swapResolution')||'device') : '';
   const refundMode = swapResolution==='refund';
-  const newImei = (swap && !refundMode) ? g('f_newImei').trim() : '';
+  let newImei = (swap && !refundMode) ? g('f_newImei').trim() : '';
+  const boardAction = swap ? '' : (g('f_boardAction') || (modalHasBoardPart() ? 'replace' : ''));
+  if(!swap){
+    const before = id ? state.repairs.find(x=>x.id===id) : null;
+    if(boardAction==='replace') newImei = g('f_boardImei').trim();
+    else if(before && before.newImei && !before.boardAction) newImei = before.newImei;   // e.g. a new IMEI that came with the imported data
+  }
   const refundAmount = refundMode ? confirmSmallIQD(parseIQD(g('f_refundAmount')), TT('مبلغ التعويض','Compensation')) : 0;
   const refundDateVal = refundMode ? g('f_refundDate') : '';
   const newDeviceModel = swap ? g('f_newDeviceModel').trim() : '';
@@ -5206,7 +5277,7 @@ async function saveRepair(id){
   if(swap){ swapRule = swapFieldsFromForm(prevRec, activationDate, newImei || (refundAmount ? 'refund' : '')); if(swapRule.error){ alert(swapRule.error); return; } }
   const repairType = g('f_repairType');
   { const dup = duplicatePartError(modalPartsUsed); if(dup){ alert(dup); return; } }
-  const fields = {customerName, phone, branchId, deviceBrand, deviceModel, imei, issue, faults, issueNote, repairType, estCost, laborCost, quoteStatus, technician, serviceType, warrantyStatus, activationDate, warrantyMonths, warrantyExpiry, newImei, newDeviceModel, swapDate, swapNote, swapInvId, partsUsed: JSON.parse(JSON.stringify(modalPartsUsed)), softwareOps: [...modalSoftware], photoBefore:modalPhotoBefore, photoAfter:modalPhotoAfter};
+  const fields = {boardAction, customerName, phone, branchId, deviceBrand, deviceModel, imei, issue, faults, issueNote, repairType, estCost, laborCost, quoteStatus, technician, serviceType, warrantyStatus, activationDate, warrantyMonths, warrantyExpiry, newImei, newDeviceModel, swapDate, swapNote, swapInvId, partsUsed: JSON.parse(JSON.stringify(modalPartsUsed)), softwareOps: [...modalSoftware], photoBefore:modalPhotoBefore, photoAfter:modalPhotoAfter};
   Object.assign(fields, swapRule.fields);
   if(swap){
     fields.swapResolution = swapResolution; fields.refundAmount = refundAmount;
