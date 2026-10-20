@@ -1769,6 +1769,7 @@ function importDevicesExcel(evt){
       let added = 0, updated = 0, skipped = 0;
       for(const row of rows){
         const jobNo = txt(row,'jobCardNo');
+        if(!txt(row,'xlCustomer') && !txt(row,'xlModel') && !txt(row,'xlDevice') && !jobNo) continue; // empty line
         const customerName = txt(row,'xlCustomer');
         const phone = txt(row,'xlPhone');
         let deviceModel = txt(row,'xlModel') || txt(row,'xlDevice');
@@ -1821,14 +1822,20 @@ function importDevicesExcel(evt){
         }
         if(!branchId){ skipped++; continue; }
         const createdAt = deviceParseDate(pick(row,'xlReceivedDate')) || deviceParseDate(pick(row,'xlDate')) || new Date().toISOString();
+        const stNew = status||STATUSES[0];
+        const closedNew = stNew===ST.DELIV || stNew===CANCELLED_STATUS;
+        const cancelReason = String(row['سبب الإلغاء']||row['Cancel reason']||'').trim();
         const newJobNo = jobNo || await genJobNo(branchId, createdAt);
         state.repairs.push({
           id: uid(), jobNo:newJobNo, customerName, phone, branchId, deviceBrand, deviceModel, imei, newImei, swapDate: newImei ? new Date().toISOString() : '', issue,
           estCost: estCost||0, technician, status: status||STATUSES[0], serviceType: serviceType||SERVICE_TYPES[0],
           warrantyStatus: warrantyStatus||WARRANTY_STATUSES[0], partsUsed: [], photoBefore:null, photoAfter:null,
           paid: !!paid, paidAt: paid ? new Date().toISOString() : null, createdAt, updatedAt: new Date().toISOString(),
-          statusHistory: [{s: status||STATUSES[0], at: createdAt, by: currentActorName(), note:'Excel'}], quoteStatus: (warrantyStatus===WARRANTY_STATUSES[1]) ? ((estCost||0)>0?'approved':'pending') : '', laborCost: estCost||0,
-          deliveredAt: (status||STATUSES[0])==='تم التسليم' ? (deliveredIn || new Date().toISOString()) : null
+          statusHistory: [{s: stNew, at: createdAt, by: currentActorName(), note:'Excel'}], quoteStatus: (warrantyStatus===WARRANTY_STATUSES[1]) ? (((estCost||0)>0 || closedNew || [ST.DONE, ST.READY].includes(stNew))?'approved':'pending') : '', laborCost: estCost||0,
+          // a delivered job without a delivery date is dated on its intake day, not today, so today's figures stay right
+          deliveredAt: stNew===ST.DELIV ? (deliveredIn || createdAt) : null,
+          cancelledAt: stNew===CANCELLED_STATUS ? (deliveredIn || createdAt) : undefined, cancelReason: stNew===CANCELLED_STATUS ? cancelReason : undefined,
+          imported: true // old jobs from Excel: kept out of the warranty-claims list (they were claimed outside the system)
         });
         added++;
       }
@@ -5529,7 +5536,7 @@ let claimBrand = '';
 let claimFilter = '';
 const CLAIM_LABELS = {'':['لم تتم المطالبة','Not claimed'], claimed:['تمت المطالبة','Claimed'], paid:['تم التعويض','Reimbursed'], rejected:['رفضت المطالبة','Rejected']};
 function claimRows(){
-  return visibleRepairs().filter(r=>!isOutWarranty(r) && [ST.DONE, ST.READY, ST.DELIV].includes(r.status)).map(r=>{
+  return visibleRepairs().filter(r=>!r.imported && !isOutWarranty(r) && [ST.DONE, ST.READY, ST.DELIV].includes(r.status)).map(r=>{
     const ded = jobDeducted(r);
     const lines = Object.entries(ded).filter(([,q])=>q>0).map(([invId,q])=>{ const it = state.inventory.find(x=>x.id===invId); return {name: it?it.name:invId, qty:q, cost: it?(Number(it.costPrice)||0):0}; });
     const partsValue = lines.reduce((s,l)=>s+l.qty*l.cost,0);
