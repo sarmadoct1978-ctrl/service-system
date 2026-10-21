@@ -548,6 +548,12 @@ details.hist table{margin-top:6px;}
 .kpi-link:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(20,33,61,.10);}
 #f_techNote{width:100%;min-height:44px;resize:vertical;font-family:inherit;}
 #f_techNote.need{border-color:#f59e0b;background:#fffbeb;}
+.pr-panel{margin-bottom:16px;border:1.5px solid #c7d2fe;background:linear-gradient(180deg,#f5f7ff,#fff);}
+.pr-count{display:inline-block;background:#4f46e5;color:#fff;border-radius:999px;padding:0 9px;font-size:13px;margin-inline-start:6px;}
+.pr-btn{border-color:#4f46e5 !important;color:#4338ca !important;font-weight:600;}
+.pr-state{background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:6px 10px;font-size:12.5px;color:#3730a3;}
+.pr-none{background:#fff5f5;border:1px solid #fecaca;border-radius:10px;padding:10px 12px;color:#991b1b;font-size:13px;}
+.pr-receive{background:#059669 !important;border-color:#059669 !important;}
 .late-badge{background:#fff !important;border:1px solid;font-weight:600;}
 #lateFilter.late-on{border-color:#dc2626;background:#fff5f5;color:#991b1b;font-weight:600;}
 .late-panel{margin-bottom:16px;border:1.5px solid #fecaca;background:linear-gradient(180deg,#fff7f7,#fff);}
@@ -1460,11 +1466,11 @@ function renderInner(){
   const navList = document.getElementById('navList');
   const readyCount = visibleRepairs().filter(r=>r.status==='انتظار استلام الزبون').length;
   const pendingSwaps = visibleRepairs().filter(r=>isSwapRepair(r) && !r.newImei && !isClosedStatus(r.status) && !(typeof isRefundSwap==='function' && isRefundSwap(r))).length;
-  const pendingIncomingTransfers = authRole==='warehouse'
+  const pendingIncomingTransfers = (authRole==='branch' ? 0 : openPartRequests().length) + (authRole==='warehouse'
     ? state.transfers.filter(t=>(t.status==='pending' && t.fromBranchId===MAIN_WH_ID) || (t.status==='in_transit' && t.toBranchId===MAIN_WH_ID)).length
     : authRole==='branch'
       ? state.transfers.filter(t=>(t.status==='in_transit' && t.toBranchId===state.authBranchId) || (t.status==='pending' && t.fromBranchId===state.authBranchId)).length
-      : state.transfers.filter(t=>t.status==='pending').length;
+      : state.transfers.filter(t=>t.status==='pending').length);
   if(authRole==='warehouse'){
     navList.innerHTML = [
       navBtn('inventory',T('navInventory'),'inventory'),
@@ -3344,6 +3350,7 @@ function attachPageHandlers(){
   { const dr = document.querySelector('.topbar .date-range'), tb = document.querySelector('#pageContent .toolbar:not(.fc-toolbar)');
     if(dr && tb){ const first = tb.querySelector('input,select'); if(first && first.nextSibling) tb.insertBefore(dr, first.nextSibling); else tb.prepend(dr); dr.classList.add('in-toolbar'); } }
   if(state.page==='dashboard'){ const pc = document.getElementById('pageContent'); if(pc) pc.insertAdjacentHTML('afterbegin', latePanelHtml()); }
+  if(['dashboard','transfers'].includes(state.page) || (state.page==='inventory' && !invForecastOpen)){ const pc = document.getElementById('pageContent'); const h = partRequestsPanelHtml(); if(pc && h) pc.insertAdjacentHTML('afterbegin', h); }
   if(state.page==='swaps' && authRole==='admin'){ const n = pendingVocCount(); const pc = document.getElementById('pageContent');
     if(n && pc) pc.insertAdjacentHTML('afterbegin', `<div class="swap-pending-banner"><span>${TT(`${n} طلب سواب من المراكز بانتظار موافقتك`, `${n} SWAP request(s) from the centers waiting for your approval`)}</span><button class="btn btn-sm btn-primary" onclick="swapFilter='voc_pending';render();">${TT('اعرض الطلبات','Show requests')}</button></div>`); }
   const df = document.getElementById('deviceFilter');
@@ -4953,7 +4960,7 @@ function ticketCard(r, compact){
     <div class="ticket st-${stIdx+1}">
       <div class="ticket-top">
         <div>
-          <div class="ticket-device">${deviceLabel(r)} <span class="status-badge status-${stIdx+1}">${DL(r.status)}</span>${isSwapRepair(r)?`<span class="status-badge badge-swap">SWAP</span>`:''}${swapKindBadge(r)}${isRefundSwap(r)?`<span class="status-badge badge-quote-pending">${TT('تعويض مالي','Compensation')}${r.refundAmount?': '+money(r.refundAmount):''}</span>`:''}${r.warrantyStatus?`<span class="status-badge ${r.warrantyStatus==='ضمن الضمان'?'badge-warranty-in':'badge-warranty-out'}">${DL(r.warrantyStatus)}</span>`:''}${quoteBadge(r)}${(!isSwapRepair(r) && r.repairType)?`<span class="status-badge ${r.repairType==='part'?((r.partsUsed||[]).length?'badge-branch':'badge-quote-pending'):'badge-branch'}">${r.repairType==='part'?((r.partsUsed||[]).length?TT('تبديل قطعة','Part replacement'):TT('يحتاج قطعة — ما انصرفت بعد','Needs a part — not issued yet')):repairTypeLabel(r.repairType)}</span>`:''}${(!isSwapRepair(r) && boardActionOf(r))?`<span class="status-badge ${boardActionOf(r)==='replace'?(r.newImei?'badge-quote-ok':'badge-quote-pending'):'badge-branch'}">${boardActionOf(r)==='replace'?TT('تبديل بورد','Board replaced')+(r.newImei?'':' — '+TT('ينتظر IMEI جديد','needs new IMEI')):TT('تصليح بورد','Board repaired')}</span>`:''}${lateBadge(r)}${r.repeatOf?`<span class="status-badge badge-repeat" title="${TT('رجع خلال 30 يوم من الجوب','Returned within 30 days of job')} ${r.repeatOf}">${TT('راجع','Repeat')} ↺</span>`:''}${r.partArrivedAt && r.status===ST.PARTS?`<span class="status-badge badge-quote-ok">${TT('وصلت القطعة','Part arrived')} ✓</span>`:''}${r.branchId?`<span class="status-badge badge-branch">${branchName(r.branchId)}</span>`:''}</div>
+          <div class="ticket-device">${deviceLabel(r)} <span class="status-badge status-${stIdx+1}">${DL(r.status)}</span>${isSwapRepair(r)?`<span class="status-badge badge-swap">SWAP</span>`:''}${swapKindBadge(r)}${isRefundSwap(r)?`<span class="status-badge badge-quote-pending">${TT('تعويض مالي','Compensation')}${r.refundAmount?': '+money(r.refundAmount):''}</span>`:''}${r.warrantyStatus?`<span class="status-badge ${r.warrantyStatus==='ضمن الضمان'?'badge-warranty-in':'badge-warranty-out'}">${DL(r.warrantyStatus)}</span>`:''}${quoteBadge(r)}${(!isSwapRepair(r) && r.repairType)?`<span class="status-badge ${r.repairType==='part'?((r.partsUsed||[]).length?'badge-branch':'badge-quote-pending'):'badge-branch'}">${r.repairType==='part'?((r.partsUsed||[]).length?TT('تبديل قطعة','Part replacement'):TT('يحتاج قطعة — ما انصرفت بعد','Needs a part — not issued yet')):repairTypeLabel(r.repairType)}</span>`:''}${(!isSwapRepair(r) && boardActionOf(r))?`<span class="status-badge ${boardActionOf(r)==='replace'?(r.newImei?'badge-quote-ok':'badge-quote-pending'):'badge-branch'}">${boardActionOf(r)==='replace'?TT('تبديل بورد','Board replaced')+(r.newImei?'':' — '+TT('ينتظر IMEI جديد','needs new IMEI')):TT('تصليح بورد','Board repaired')}</span>`:''}${partReqBadge(r)}${lateBadge(r)}${r.repeatOf?`<span class="status-badge badge-repeat" title="${TT('رجع خلال 30 يوم من الجوب','Returned within 30 days of job')} ${r.repeatOf}">${TT('راجع','Repeat')} ↺</span>`:''}${r.partArrivedAt && r.status===ST.PARTS?`<span class="status-badge badge-quote-ok">${TT('وصلت القطعة','Part arrived')} ✓</span>`:''}${r.branchId?`<span class="status-badge badge-branch">${branchName(r.branchId)}</span>`:''}</div>
           <div class="ticket-meta">${r.jobNo?`<span class="mono" style="font-weight:600;color:var(--violet-dark);">${T('jobCardNo')}: ${r.jobNo}</span> · `:''}${r.imei?('IMEI: '+r.imei+' · '):''}${r.newImei?(T('newImeiShort')+': '+r.newImei+' · '):''}<button class="link-btn" onclick="openCustomerHistory('${r.id}')" title="${TT('سجل الزبون','Customer history')}">${r.customerName}</button>${visits?` <span style="font-size:11px;color:var(--muted);">(${TT('زيارات سابقة','previous visits')}: ${visits})</span>`:''} · ${r.phone} · ${T('receivedOn')} ${fmtDate(r.createdAt)}${r.deliveredAt?' · '+T('deliveredOn')+' '+fmtDate(r.deliveredAt):''} · ${T('jobAgeLabel')}: ${jobAgeDays(r)} ${T('daysLabel')}${r.technician?' · '+T('technicianLabel')+' '+r.technician:''}${(!out && expiry)?` · ${TT('الضمان لغاية','Warranty until')} ${fmtISODate(expiry)}`:''}</div>
           ${(r.photoBefore||r.photoAfter)?`<div class="ticket-photos">
             ${r.photoBefore?`<a href="${r.photoBefore}" target="_blank" rel="noopener" class="ticket-photo-link"><img src="${r.photoBefore}" class="ticket-photo-thumb"><span>${T('photoBefore')}</span></a>`:''}
@@ -4973,6 +4980,7 @@ function ticketCard(r, compact){
       ${isCancelled ? '' : stepper}
       ${statusHistoryHtml(r)}
       <div class="ticket-actions">
+        ${partReqReceiveBtn(r)}
         ${(!isCancelled && nextSt && canOperate)?`<button class="btn btn-sm" onclick="advanceStatus('${r.id}')">${icon('check')} ${TT('نقل إلى','Move to')}: ${DL(nextSt)}</button>`:''}
         ${vocActionButtons(r)}
         ${(canOperate && out && !isClosedStatus(r.status) && q!=='approved' && (r.estCost||0)>0)?`<button class="btn btn-sm btn-primary" onclick="setQuote('${r.id}','approved')">${icon('check')} ${TT('الزبون وافق','Customer approved')}</button>`:''}
@@ -5006,6 +5014,7 @@ function swapInvOptionsHtml(branchId, current){
   return `<option value="">${TT('— بدون (الجهاز البديل مو من المخزن) —','— None (replacement not from stock) —')}</option>` + inv.map(p=>`<option value="${p.id}" ${p.id===current?'selected':''}>${p.name} (${p.code}) — ${T('available')}: ${p.qty}</option>`).join('');
 }
 function openRepairModal(id){
+  modalPendingPartReq = null;
   const editing = id ? state.repairs.find(r=>r.id===id) : null;
   if(editing && authRole==='branch' && editing.branchId!==state.authBranchId){ alert(T('alertNoPermission')); return; }
   modalPartsUsed = editing ? JSON.parse(JSON.stringify(editing.partsUsed||[])) : [];
@@ -5460,6 +5469,7 @@ async function saveRepair(id){
     logAudit('repair_create', authRole, currentActorName(), `${T('auditDeviceCreated')}: ${deviceBrand} ${deviceModel} (${jobNo}) — ${customerName}${r.repeatOf?' — '+TT('راجع من','repeat of')+' '+r.repeatOf:''}`);
   }
   if(deviceBrand && ensureCatalogModel(deviceBrand, deviceModel)) saveDeviceCatalog();
+  if(modalPendingPartReq){ attachPartRequest(r, modalPendingPartReq); modalPendingPartReq = null; }
   applyJobStock(r);
   saveRepairs();
   closeModal();
@@ -5725,11 +5735,17 @@ function confirmReceiptTransfer(id){
     const arrivedLine = {invId:destItem.id, code:destItem.code, name:destItem.name, qty:1, price:Number(destItem.sellPrice)||0};
     const dupMsg = duplicatePartError([...(job.partsUsed||[]), arrivedLine]);
     if(dupMsg) alert(TT(`وصلت القطعة، بس ما انضافت للجوب ${job.jobNo||''}:\n`, `The part arrived but was not added to job ${job.jobNo||''}:\n`) + dupMsg);
-    else if(confirm(TT(`وصلت القطعة للجوب ${job.jobNo||''}. تضيفها لقطع الجوب هسه؟ (تنصرف من المخزن لما يبدي التصليح)`, `The part for job ${job.jobNo||''} arrived. Add it to the job's parts now? (taken from stock when repair starts)`))){
+    else if(t.autoIssue || confirm(TT(`وصلت القطعة للجوب ${job.jobNo||''}. تضيفها لقطع الجوب هسه؟ (تنصرف من المخزن لما يبدي التصليح)`, `The part for job ${job.jobNo||''} arrived. Add it to the job's parts now? (taken from stock when repair starts)`))){
       job.partsUsed = [...(job.partsUsed||[]), arrivedLine];
       if(isOutWarranty(job)) job.estCost = (Number(job.laborCost)||0) + job.partsUsed.reduce((s,p)=>s+(Number(p.price)||0)*p.qty,0);
       applyJobStock(job);
+      // a part the technician asked for: it is issued to the job and the job goes back to "in repair"
+      if(t.autoIssue){
+        if(job.repairType!=='part') job.repairType = 'part';
+        if(job.status===ST.PARTS) pushStatus(job, ST.REPAIR, TT('وصلت القطعة وانصرفت للجوب','Part received and issued to the job'));
+      }
     }
+    if(job.partReq && job.partReq.transferId===t.id){ job.partReq.status = 'received'; job.partReq.receivedAt = t.receivedAt; }
     saveRepairs();
   }
   render();
@@ -6460,7 +6476,9 @@ function refreshPartSelect(){
   fillPartCodeList();
   const hint = document.getElementById('partPickHint');
   const any = !!ps.querySelector('option:not([disabled])');
-  if(hint) hint.innerHTML = any ? '' : `<span style="color:var(--red);">${TT('ما في قطعة مطابقة متوفرة بمخزن الفرع لهذا الجهاز','No matching part in this branch for this device')}${type?' ('+type+')':''}.</span><br><span style="color:var(--text);">${partPickDiagnosis(modalCtx.branchId, type, brand, model)}</span>`;
+  const editingJob = modalCtx.id ? state.repairs.find(x=>x.id===modalCtx.id) : null;
+  const hasReq = (editingJob && editingJob.partReq && ['open','sent'].includes(editingJob.partReq.status)) || !!modalPendingPartReq;
+  if(hint) hint.innerHTML = any ? (hasReq ? partReqHintHtml() : '') : `<span style="color:var(--red);">${TT('ما في قطعة مطابقة متوفرة بمخزن الفرع لهذا الجهاز','No matching part in this branch for this device')}${type?' ('+biName(type)+')':''}.</span><br><span style="color:var(--text);">${partPickDiagnosis(modalCtx.branchId, type, brand, model)}</span><div style="margin-top:6px;">${partReqHintHtml()}</div>`;
 }
 
 // a job may use each part only once and only one part of each type (one screen, one board...)
@@ -6904,6 +6922,140 @@ function dashGo(kind, val){
   else if(kind==='low'){ invLowOnly = true; invForecastOpen = false; state.page = 'inventory'; }
   else if(kind==='invoices'){ state.page = 'invoices'; }
   render(); window.scrollTo(0,0);
+}
+/* =====================================================================
+   v1.9 — Part requests: a technician asks for a part his branch does not
+   have. The main warehouse and the admin get a notification with the part
+   type, brand and model and how long the job has been waiting; they send
+   a matching part from any stock, and the technician receives it on the
+   job, which issues it to the job and moves it back to "in repair".
+   The request is kept on the job itself (r.partReq) so it syncs with it.
+   ===================================================================== */
+let modalPendingPartReq = null;
+const PR_STATUS = { open:['بانتظار المخزن','Waiting for the warehouse'], sent:['القطعة بالطريق','Part on its way'], received:['وصلت القطعة','Part received'], cancelled:['ملغي','Cancelled'] };
+function openPartRequests(){
+  return state.repairs.filter(r=>r.partReq && r.partReq.status==='open' && !isClosedStatus(r.status))
+    .filter(r=>authRole!=='branch' || r.branchId===state.authBranchId)
+    .sort((a,b)=>new Date(a.partReq.at)-new Date(b.partReq.at));
+}
+function partReqLabel(pr){ return [biName(pr.type||''), pr.brand, pr.model].filter(Boolean).join(' · '); }
+// a matching part anywhere other than the job's branch, with stock
+function partReqSources(r){
+  const pr = r.partReq || {};
+  return state.inventory.filter(p=>p.branchId!==r.branchId && !p.defective && (Number(p.qty)||0)>0 && partFit(p, pr.type||'', pr.brand||r.deviceBrand, pr.model||r.deviceModel))
+    .sort((a,b)=> (a.branchId===MAIN_WH_ID?0:1)-(b.branchId===MAIN_WH_ID?0:1) || (Number(b.qty)||0)-(Number(a.qty)||0));
+}
+function attachPartRequest(r, req){
+  r.partReq = {type:req.type||'', brand:req.brand||r.deviceBrand||'', model:req.model||r.deviceModel||'', note:req.note||'', at:new Date().toISOString(), by:currentActorName(), status:'open'};
+  if(!Array.isArray(r.statusHistory)) r.statusHistory = [];
+  if([ST.RECV, ST.DIAG, ST.REPAIR].includes(r.status)) pushStatus(r, ST.PARTS, TT('طلب قطعة من المخزن: ','Part requested from the warehouse: ') + partReqLabel(r.partReq));
+  else r.statusHistory.push({s:r.status, at:r.partReq.at, by:r.partReq.by, note:TT('طلب قطعة من المخزن: ','Part requested from the warehouse: ') + partReqLabel(r.partReq)});
+  logAudit('transfer_request', authRole, currentActorName(), `${TT('طلب قطعة غير متوفرة','Out-of-stock part request')}: ${partReqLabel(r.partReq)} — ${r.jobNo||''} (${branchName(r.branchId)})`);
+}
+// from the job form: the part list for this device is empty -> ask the warehouse
+function requestPartFromForm(){
+  const type = (document.getElementById('partType')||{}).value||'';
+  const brand = (document.getElementById('f_deviceBrand')||{}).value||'';
+  const model = (document.getElementById('f_deviceModel')||{}).value||'';
+  if(!type || type===SW_TYPE){ alert(TT('اختار نوع القطعة اللي تحتاجها من القائمة أولاً (شاشة، بطارية...).','Choose the part type you need from the list first (screen, battery...).')); return; }
+  if(!brand || !model){ alert(TT('حدد البراند والموديل أولاً.','Choose the brand and model first.')); return; }
+  const note = prompt(TT(`طلب «${biName(type)}» لـ ${brand} ${model} من المخزن.\nملاحظة للمخزن (اختياري):`, `Request "${biName(type)}" for ${brand} ${model} from the warehouse.\nNote for the warehouse (optional):`), '');
+  if(note===null) return;
+  const req = {type, brand, model, note:note.trim()};
+  const editing = modalCtx.id ? state.repairs.find(x=>x.id===modalCtx.id) : null;
+  if(editing){
+    attachPartRequest(editing, req); saveRepairs();
+    const st = document.getElementById('f_status'); if(st && [...st.options].some(o=>o.value===editing.status)) st.value = editing.status;
+  }else modalPendingPartReq = req;      // created with the job when it is saved
+  const rt = document.getElementById('f_repairType'); if(rt){ rt.value = 'part'; rt.dataset.manual = '1'; rt.dataset.prev = 'part'; }
+  refreshPartSelect();
+  alert(TT('انبعث الطلب للمخزن الرئيسي والمدير. الجوب صار «انتظار قطع» ولمن توصل القطعة يطلعلك زر «استلام القطعة» على الجوب.','The request went to the main warehouse and the admin. The job is now "Waiting for parts"; when the part arrives a "Receive part" button shows on the job.'));
+}
+function partReqHintHtml(){
+  const editing = modalCtx.id ? state.repairs.find(x=>x.id===modalCtx.id) : null;
+  const pr = editing && editing.partReq && editing.partReq.status!=='received' && editing.partReq.status!=='cancelled' ? editing.partReq : (modalPendingPartReq ? {...modalPendingPartReq, status:'open'} : null);
+  if(pr) return `<div class="pr-state">📨 ${TT('طلب قطعة:','Part request:')} <b>${partReqLabel(pr)}</b> — ${(PR_STATUS[pr.status]||PR_STATUS.open)[lang==='ar'?0:1]}</div>`;
+  return `<button type="button" class="btn btn-sm pr-btn" onclick="requestPartFromForm()">📨 ${TT('اطلب القطعة من المخزن (إشعار للمخزن والمدير)','Request the part from the warehouse (notifies warehouse + admin)')}</button>`;
+}
+// from a job card (branch "Request part" button)
+function requestPartForJob(id){
+  const r = state.repairs.find(x=>x.id===id); if(!r) return;
+  openRepairModal(id);
+  const rt = document.getElementById('f_repairType'); if(rt && rt.value!=='part'){ rt.value = 'part'; rt.dataset.manual = '1'; rt.dataset.prev = 'part'; updateRepairTypeUI(); }
+  refreshPartSelect();
+  const pt = document.getElementById('partType'); if(pt) pt.focus();
+}
+// ---------- warehouse / admin side ----------
+function sendPartForRequest(id){
+  if(!canManageStock()){ alert(T('alertNoPermission')); return; }
+  const r = state.repairs.find(x=>x.id===id); if(!r || !r.partReq) return;
+  const src = partReqSources(r);
+  showModal(`
+    <h3>📨 ${TT('إرسال قطعة للجوب','Send a part to the job')} ${r.jobNo||''}</h3>
+    <p style="font-size:13px;color:var(--muted);margin-top:-8px;">${branchName(r.branchId)} · ${deviceLabel(r)} · ${TT('المطلوب:','Needed:')} <b>${partReqLabel(r.partReq)}</b>${r.partReq.note?` · ${cleanText(r.partReq.note)}`:''}</p>
+    ${src.length?`<div class="form-row"><label>${TT('من أي مخزن','From which stock')}</label>
+      <select id="pr_item">${src.map(p=>`<option value="${p.id}">${branchName(p.branchId)} — ${p.name} (${p.code||'-'}) — ${T('available')}: ${p.qty}</option>`).join('')}</select></div>
+      <div class="form-row"><label>${T('transferNote')}</label><input id="pr_note" placeholder="${TT('اختياري','optional')}"></div>`
+    :`<div class="pr-none">${TT('ما متوفرة بأي مخزن قطعة تطابق هذا الجهاز. لازم تنطلب من الشركة/المورد، أو تنضاف للمخزن الرئيسي وبعدين ترسلها من هنا.','No matching part is in stock anywhere. It has to be ordered from the supplier, or added to the main warehouse and then sent from here.')}</div>`}
+    <div class="modal-actions">
+      ${src.length?`<button class="btn btn-primary" onclick="confirmSendPartForRequest('${r.id}')">${icon('transfer')} ${TT('إرسال للفرع','Send to the branch')}</button>`:''}
+      <button class="btn btn-danger" onclick="cancelPartRequest('${r.id}')">${TT('إلغاء الطلب','Cancel request')}</button>
+      <button class="btn" onclick="closeModal()">${T('cancel')}</button>
+    </div>`);
+}
+function confirmSendPartForRequest(id){
+  const r = state.repairs.find(x=>x.id===id); if(!r || !r.partReq) return;
+  const item = state.inventory.find(x=>x.id===(document.getElementById('pr_item')||{}).value);
+  if(!item || (Number(item.qty)||0)<1){ alert(T('alertInsufficientForTransfer')); return; }
+  const now = new Date().toISOString();
+  const t = { id: uid(), itemId: item.id, code: item.code, name: item.name, brand: item.brand||'', partType: item.partType||'', model: item.model||'', costPrice: item.costPrice, sellPrice: item.sellPrice,
+    qty:1, fromBranchId: item.branchId, toBranchId: r.branchId, status:'in_transit', note: ((document.getElementById('pr_note')||{}).value||'').trim(), direct:true, repairId:r.id, autoIssue:true,
+    requestedBy: r.partReq.by, requestedAt: r.partReq.at, sentAt: now, sentBy: currentActorName() };
+  addMove(item.id, -1, 'transfer_out', 'tr:'+t.id, 'trS_'+t.id);
+  state.transfers.push(t);
+  r.partReq.status = 'sent'; r.partReq.sentAt = now; r.partReq.sentBy = currentActorName(); r.partReq.transferId = t.id;
+  if(!Array.isArray(r.statusHistory)) r.statusHistory = [];
+  r.statusHistory.push({s:r.status, at:now, by:currentActorName(), note:`${TT('انبعثت القطعة','Part sent')}: ${item.name} (${branchName(item.branchId)} → ${branchName(r.branchId)})`});
+  saveStockMoves(); saveInventory(); saveTransfers(); saveRepairs();
+  logAudit('transfer_direct', authRole, currentActorName(), `${TT('إرسال قطعة لطلب جوب','Part sent for job request')}: ${item.name} → ${branchName(r.branchId)} (${r.jobNo||''})`);
+  closeModal(); render();
+}
+function cancelPartRequest(id){
+  const r = state.repairs.find(x=>x.id===id); if(!r || !r.partReq) return;
+  const why = prompt(TT('سبب إلغاء طلب القطعة:','Reason for cancelling the part request:'), '');
+  if(why===null) return;
+  r.partReq.status = 'cancelled'; r.partReq.cancelReason = why.trim(); r.partReq.cancelledBy = currentActorName();
+  if(!Array.isArray(r.statusHistory)) r.statusHistory = [];
+  r.statusHistory.push({s:r.status, at:new Date().toISOString(), by:currentActorName(), note:TT('إلغاء طلب القطعة','Part request cancelled')+(why.trim()?': '+why.trim():'')});
+  saveRepairs(); closeModal(); render();
+}
+function partRequestsPanelHtml(){
+  const list = openPartRequests();
+  if(!list.length || authRole==='branch') return '';
+  return `<div class="panel pr-panel">
+    <div class="late-head"><div><h3 style="margin:0;font-size:16px;">📨 ${TT('طلبات قطع من الفنيين','Part requests from technicians')} <span class="pr-count">${list.length}</span></h3>
+      <div style="font-size:12.5px;color:var(--muted);">${TT('قطع ما متوفرة بمخزن الفرع. ارسلها من أي مخزن وتوصل للفني على الجوب.','Parts the branch does not have. Send one from any stock; it reaches the technician on the job.')}</div></div></div>
+    <table><thead><tr><th>${T('jobCardNo')}</th><th>${T('colBranch')}</th><th>${TT('القطعة المطلوبة','Part needed')}</th><th>${TT('ينتظر من','Waiting')}</th><th>${TT('متوفرة في','In stock at')}</th><th></th></tr></thead><tbody>
+    ${list.map(r=>{ const src = partReqSources(r); const h = (Date.now()-new Date(r.partReq.at).getTime())/36e5;
+      return `<tr>
+        <td class="mono" style="font-size:12px;">${r.jobNo||'-'}<div style="font-size:11px;color:var(--muted);">${r.technician||r.partReq.by||''}</div></td>
+        <td>${branchName(r.branchId)}</td>
+        <td><b>${partReqLabel(r.partReq)}</b>${r.partReq.note?`<div style="font-size:11.5px;color:var(--muted);">${cleanText(r.partReq.note)}</div>`:''}</td>
+        <td><span class="status-badge ${h>24?'status-1':'badge-quote-pending'}">${fmtWait(h)}</span></td>
+        <td style="font-size:12px;">${src.length?[...new Set(src.map(p=>branchName(p.branchId)))].slice(0,3).join('، '):`<span style="color:var(--red);">${TT('ما متوفرة','none')}</span>`}</td>
+        <td>${canManageStock()?`<button class="btn btn-sm btn-primary" onclick="sendPartForRequest('${r.id}')">${icon('transfer')} ${TT('إرسال','Send')}</button>`:''}</td>
+      </tr>`; }).join('')}
+    </tbody></table></div>`;
+}
+// job card: request state + receive button for the branch
+function partReqBadge(r){
+  const pr = r.partReq; if(!pr || isClosedStatus(r.status) || pr.status==='received' || pr.status==='cancelled') return '';
+  return `<span class="status-badge ${pr.status==='sent'?'badge-quote-ok':'badge-quote-pending'}">📨 ${(PR_STATUS[pr.status]||PR_STATUS.open)[lang==='ar'?0:1]}: ${partReqLabel(pr)}</span>`;
+}
+function partReqReceiveBtn(r){
+  const pr = r.partReq; if(!pr || pr.status!=='sent' || isClosedStatus(r.status)) return '';
+  const t = state.transfers.find(x=>x.id===pr.transferId && x.status==='in_transit'); if(!t || !canReceiveTransfer(t)) return '';
+  return `<button class="btn btn-sm btn-primary pr-receive" onclick="confirmReceiptTransfer('${t.id}')">📦 ${TT('استلام القطعة','Receive part')}: ${t.name}</button>`;
 }
 
 loadAll();
