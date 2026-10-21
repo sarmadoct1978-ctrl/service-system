@@ -517,6 +517,14 @@ details.hist table{margin-top:6px;}
 .fc-table th.num,.fc-table td.num{text-align:center;}
 .fc-table tr.fc-need td{background:#fff8ec;}
 .fc-table td.fc-order{font-weight:700;color:var(--violet-dark,#4338ca);font-size:14px;}
+.modal.modal-wide{max-width:1120px;max-height:94vh;padding:20px 28px 0;}
+.modal.modal-wide h3{margin-bottom:12px;}
+.modal.modal-wide .form-row{margin-bottom:10px;}
+/* save / cancel always visible at the bottom of the job form */
+.modal.modal-wide .modal-actions{position:sticky;bottom:0;z-index:5;background:#fff;margin:8px -28px 0;padding:12px 28px 16px;border-top:1px solid var(--line,#e5e7eb);box-shadow:0 -6px 14px rgba(20,33,61,.06);}
+.modal-cols{column-count:2;column-gap:28px;}
+.modal-cols > *{break-inside:avoid;-webkit-column-break-inside:avoid;}
+@media (max-width:900px){ .modal-cols{column-count:1;} }
 .tickets{gap:6px !important;}
 .tickets .ticket{padding:8px 12px;gap:4px;}
 .tickets .ticket-top{gap:8px;}
@@ -4976,6 +4984,7 @@ function openRepairModal(id){
   const canAddTech = authRole==='admin' || authRole==='branch';
   showModal(`
     <h3>${editing?T('editDeviceTitle'):T('newDeviceTitle')}${editing&&editing.jobNo?` <span class="mono" style="font-size:13px;color:var(--muted);">${editing.jobNo}</span>`:''}</h3>
+    <div class="modal-cols">
     <div class="form-2col">
       <div class="form-row"><label>${T('customerName')}</label><input id="f_customerName" value="${editing?editing.customerName:''}"></div>
       <div class="form-row"><label>${T('phone')}</label><input id="f_phone" value="${editing?editing.phone:''}" oninput="updateCustInfo()" inputmode="tel"></div>
@@ -5095,11 +5104,12 @@ function openRepairModal(id){
       <p style="font-size:11.5px;color:var(--muted);margin:4px 0 0;">${TT('القطعة تنصرف من المخزن أول ما تضيفها للجوب وتحفظ، وترجع للمخزن إذا انشالت أو انلغى الجوب. سعر القطعة تكتبه بيدك لكل جوب (خارج الضمان). إذا القطعة مو موجودة اطلبها من المخزن الرئيسي.','A part leaves stock as soon as you add it to the job and save, and returns if removed or the job is cancelled. Type the part price for each job (out of warranty). If a part is missing, request it from the main warehouse.')}</p>
     </div>
     </div>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-primary" id="saveRepairBtn" onclick="saveRepair(${editing?`'${id}'`:'null'})">${T('save')}</button>
       <button class="btn" onclick="closeModal()">${T('cancel')}</button>
     </div>
-  `);
+  `, {wide:true});
   renderModalParts();
   renderModalPhotos();
   fillModelOptions(editing ? editing.deviceModel : '');
@@ -5880,8 +5890,14 @@ function showModal(html, opts){
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.id = 'modalOverlay';
-  overlay.innerHTML = `<div class="modal">${html}</div>`;
-  if(!(opts && opts.locked)) overlay.onclick = (e)=>{ if(e.target===overlay) closeModal(); };
+  overlay.innerHTML = `<div class="modal${opts && opts.wide ? ' modal-wide' : ''}">${html}</div>`;
+  if(!(opts && opts.locked)){
+    // close on a real click on the dark area only: a drag that starts inside the form and ends outside must not close it,
+    // and the big job form only closes with its own buttons
+    let downOnOverlay = false;
+    overlay.addEventListener('mousedown', e=>{ downOnOverlay = e.target===overlay; });
+    overlay.onclick = (e)=>{ if(e.target===overlay && downOnOverlay && !(opts && opts.wide)) closeModal(); downOnOverlay = false; };
+  }
   document.body.appendChild(overlay);
 }
 function closeModal(silent){
