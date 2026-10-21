@@ -517,14 +517,48 @@ details.hist table{margin-top:6px;}
 .fc-table th.num,.fc-table td.num{text-align:center;}
 .fc-table tr.fc-need td{background:#fff8ec;}
 .fc-table td.fc-order{font-weight:700;color:var(--violet-dark,#4338ca);font-size:14px;}
-.modal.modal-wide{max-width:1120px;max-height:94vh;padding:20px 28px 0;}
-.modal.modal-wide h3{margin-bottom:12px;}
-.modal.modal-wide .form-row{margin-bottom:10px;}
-/* save / cancel always visible at the bottom of the job form */
-.modal.modal-wide .modal-actions{position:sticky;bottom:0;z-index:5;background:#fff;margin:8px -28px 0;padding:12px 28px 16px;border-top:1px solid var(--line,#e5e7eb);box-shadow:0 -6px 14px rgba(20,33,61,.06);}
-.modal-cols{column-count:2;column-gap:28px;}
+.modal.modal-wide{max-width:min(1480px,97vw);width:97vw;max-height:96vh;padding:0;overflow-y:auto;}
+.modal-wide .modal-fit{padding:14px 22px 0;}
+.modal-wide h3{margin:0 0 8px;font-size:16px;}
+.modal-cols{column-count:3;column-gap:22px;}
 .modal-cols > *{break-inside:avoid;-webkit-column-break-inside:avoid;}
-@media (max-width:900px){ .modal-cols{column-count:1;} }
+@media (max-width:1150px){ .modal-cols{column-count:2;} }
+@media (max-width:760px){ .modal-cols{column-count:1;} }
+.modal-wide .form-row{margin-bottom:7px;gap:3px;}
+.modal-wide .form-row label{font-size:11.5px;}
+.modal-wide input:not([type=checkbox]):not([type=radio]),.modal-wide select{padding:6px 10px;min-height:34px;font-size:13px;}
+.modal-wide .form-2col{gap:8px;}
+.modal-wide .mhint{display:none;}
+.modal-wide .fault-cats{gap:5px;}
+.modal-wide .fault-cat{min-height:38px;padding:5px 9px;}
+.modal-wide .fault-cat .fc-txt b{font-size:12px;} .modal-wide .fault-cat .fc-txt small{font-size:10px;}
+.modal-wide .fault-panel:not([hidden]){gap:4px;grid-template-columns:1fr;}
+.modal-wide .fault-panel .chip{width:100%;box-sizing:border-box;display:flex;}
+.modal-wide .fault-panel .chip{padding:4px 8px;font-size:11.5px;white-space:normal;line-height:1.35;min-width:0;overflow-wrap:anywhere;align-items:flex-start;}
+.modal-wide .warranty-toggle .btn,.modal-wide .board-box .btn{padding:6px 10px;font-size:12.5px;}
+.modal-wide .board-box{padding:8px 10px;margin:6px 0 4px;}
+.modal-wide .cost-box{padding:8px 10px;}
+.modal-wide .item-row{gap:6px;}
+.modal-wide .fault-selected{font-size:12px;margin-top:4px;}
+.swap-fields{background:#e6e3ff !important;border:1.5px solid #8b83f0 !important;box-shadow:inset 0 0 0 1px rgba(255,255,255,.6);}
+.swap-fields input,.swap-fields select{background:#fff;}
+/* save / cancel always visible at the bottom of the job form */
+.modal.modal-wide .modal-actions{position:sticky;bottom:0;z-index:5;background:#fff;margin:6px -22px 0;padding:10px 22px 12px;border-top:1px solid var(--line,#e5e7eb);box-shadow:0 -6px 14px rgba(20,33,61,.06);}
+.kpi-link{cursor:pointer;transition:transform .12s, box-shadow .12s;}
+.kpi-link:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(20,33,61,.10);}
+.late-badge{background:#fff !important;border:1px solid;font-weight:600;}
+#lateFilter.late-on{border-color:#dc2626;background:#fff5f5;color:#991b1b;font-weight:600;}
+.late-panel{margin-bottom:16px;border:1.5px solid #fecaca;background:linear-gradient(180deg,#fff7f7,#fff);}
+.late-head{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:12px;}
+.late-total{display:flex;align-items:baseline;gap:8px;border:none;background:#dc2626;color:#fff;border-radius:14px;padding:10px 18px;cursor:pointer;font-family:inherit;font-weight:600;font-size:13px;}
+.late-total span{font-size:28px;font-weight:800;line-height:1;}
+.late-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;}
+.late-chip{display:flex;flex-direction:column;align-items:flex-start;gap:4px;border:1px solid #e5e7eb;border-inline-start:5px solid var(--lc);background:#fff;border-radius:12px;padding:10px 12px;cursor:pointer;font-family:inherit;text-align:start;}
+.late-chip b{font-size:24px;color:var(--lc);line-height:1.1;}
+.late-chip span{font-size:12.5px;color:var(--text,#1d1f2b);font-weight:600;}
+.late-chip:hover{box-shadow:0 4px 12px rgba(0,0,0,.08);}
+.late-chip.zero{opacity:.45;cursor:default;}
+.swap-pending-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#ede9fe;border:1.5px solid #8b83f0;border-radius:12px;padding:10px 14px;margin-bottom:12px;font-weight:600;color:#4c1d95;}
 .tickets{gap:6px !important;}
 .tickets .ticket{padding:8px 12px;gap:4px;}
 .tickets .ticket-top{gap:8px;}
@@ -1569,12 +1603,12 @@ function renderDashboard(){
 
   return `
     <div class="grid-auto">
-      <div class="kpi tint-violet"><div class="kpi-top"><p class="kpi-label">${T('kpiActiveRepairs')}</p><div class="kpi-icon violet">${icon('devices')}</div></div><p class="kpi-value">${active}</p></div>
-      <div class="kpi tint-teal"><div class="kpi-top"><p class="kpi-label">${T('kpiRevenueToday')}</p><div class="kpi-icon teal">${icon('reports')}</div></div><p class="kpi-value">${money(revenueToday)}</p></div>
-      <div class="kpi tint-green"><div class="kpi-top"><p class="kpi-label">${T('kpiPaidRevenue')}</p><div class="kpi-icon green">${icon('reports')}</div></div><p class="kpi-value">${money(totalCollected)}</p></div>
-      <div class="kpi ${lowStock>0?'tint-red':'tint-amber'}"><div class="kpi-top"><p class="kpi-label">${T('kpiLowStock')}</p><div class="kpi-icon ${lowStock>0?'red':'amber'}">${icon('box')}</div></div><p class="kpi-value">${lowStock}</p></div>
-      <div class="kpi tint-pink"><div class="kpi-top"><p class="kpi-label">${T('kpiSwapDevices')}</p><div class="kpi-icon pink">${icon('box')}</div></div><p class="kpi-value">${swapCount}</p></div>
-      <div class="kpi ${overdue.length>0?'tint-red':'tint-blue'}"><div class="kpi-top"><p class="kpi-label">${T('kpiOverdue')}</p><div class="kpi-icon ${overdue.length>0?'red':'blue'}">${icon('history')}</div></div><p class="kpi-value">${overdue.length}</p></div>
+      <div class="kpi tint-violet kpi-link" onclick="dashGo('late','open')"><div class="kpi-top"><p class="kpi-label">${T('kpiActiveRepairs')}</p><div class="kpi-icon violet">${icon('devices')}</div></div><p class="kpi-value">${active}</p></div>
+      <div class="kpi tint-teal kpi-link" onclick="dashGo('invoices')"><div class="kpi-top"><p class="kpi-label">${T('kpiRevenueToday')}</p><div class="kpi-icon teal">${icon('reports')}</div></div><p class="kpi-value">${money(revenueToday)}</p></div>
+      <div class="kpi tint-green kpi-link" onclick="dashGo('invoices')"><div class="kpi-top"><p class="kpi-label">${T('kpiPaidRevenue')}</p><div class="kpi-icon green">${icon('reports')}</div></div><p class="kpi-value">${money(totalCollected)}</p></div>
+      <div class="kpi ${lowStock>0?'tint-red':'tint-amber'} kpi-link" onclick="dashGo('low')"><div class="kpi-top"><p class="kpi-label">${T('kpiLowStock')}</p><div class="kpi-icon ${lowStock>0?'red':'amber'}">${icon('box')}</div></div><p class="kpi-value">${lowStock}</p></div>
+      <div class="kpi tint-pink kpi-link" onclick="dashGo('swaps')"><div class="kpi-top"><p class="kpi-label">${T('kpiSwapDevices')}</p><div class="kpi-icon pink">${icon('box')}</div></div><p class="kpi-value">${swapCount}</p></div>
+      <div class="kpi ${overdue.length>0?'tint-red':'tint-blue'} kpi-link" onclick="dashGo('late','overdue7')"><div class="kpi-top"><p class="kpi-label">${T('kpiOverdue')} (${TT('أكثر من','over')} ${OVERDUE_DAYS} ${TT('أيام','days')})</p><div class="kpi-icon ${overdue.length>0?'red':'blue'}">${icon('history')}</div></div><p class="kpi-value">${overdue.length}</p></div>
     </div>
     ${overdue.length?`
     <div class="panel">
@@ -1585,7 +1619,7 @@ function renderDashboard(){
       <div class="panel-head"><h3>${T('statusDistribution')}</h3></div>
       <div class="status-grid">
         ${statusCounts.map(x=>`
-          <div class="kpi status-kpi">
+          <div class="kpi status-kpi kpi-link" onclick="dashGo('status', '${x.s}')">
             <div class="kpi-top"><p class="kpi-label">${DL(x.s)}</p><div class="kpi-icon ${statusColorClass(x.idx)}">${icon('devices')}</div></div>
             <p class="kpi-value">${x.count}</p>
           </div>
@@ -1621,7 +1655,7 @@ function filteredDevicesList(){
   return list;
 }
 function renderDevices(){
-  const list = filteredDevicesList();
+  const list = applyLateFilter(filteredDevicesList());
   return `
     <div class="toolbar">
       <input class="search-input" id="deviceSearch" placeholder="${T('searchDevices')}" value="${deviceSearch}">
@@ -1629,6 +1663,7 @@ function renderDevices(){
         <option value="">${T('allStatuses')}</option>
         ${ALL_STATUSES.map(s=>`<option value="${s}" ${deviceFilter===s?'selected':''}>${DL(s)}</option>`).join('')}
       </select>
+      ${lateFilterSelectHtml()}
       <select id="deviceTypeFilter">
         <option value="">${T('allTypes')}</option>
         ${SERVICE_TYPES.map(s=>`<option value="${s}" ${deviceTypeFilter===s?'selected':''}>${DL(s)}</option>`).join('')}
@@ -1703,7 +1738,7 @@ function renderSwaps(){
     <div class="swap-layout">
       <div class="panel swap-list">
         <table>
-          <thead><tr><th>${T('jobCardNo')}</th><th>${T('colDevice')}</th><th>${T('oldImeiLabel')}</th><th>${T('newImeiLabel')}</th><th>${T('status')}</th></tr></thead>
+          <thead><tr><th>${T('jobCardNo')}</th><th>${T('colDevice')}</th><th>${T('oldImeiLabel')}</th><th>${T('newImeiLabel')}</th><th>${T('status')}</th>${authRole==='admin'?`<th>${TT('الموافقة','Approval')}</th>`:''}</tr></thead>
           <tbody>
             ${list.map(r=>`
               <tr class="${r.id===selectedSwapId?'selected':''}" onclick="selectSwap('${r.id}')">
@@ -1712,6 +1747,7 @@ function renderSwaps(){
                 <td class="mono" style="font-size:12.5px;">${r.imei||'-'}</td>
                 <td class="mono" style="font-size:12.5px;">${r.newImei?r.newImei:`<span class="swap-pending">${T('swapNotYet')}</span>`}</td>
                 <td>${swapStatusBadge(r)}</td>
+                ${authRole==='admin'?`<td onclick="event.stopPropagation()" style="white-space:nowrap;">${vocActionButtons(r) || (swapNeedsApproval(r) ? swapKindBadge(r) : '<span style="color:var(--muted);font-size:12px;">—</span>')}</td>`:''}
               </tr>`).join('')}
           </tbody>
         </table>
@@ -2041,7 +2077,7 @@ function handleImportInventory(evt){
         const model = String(pick(row, ['الموديل','Model','model'])).trim();
 
         let branchId = defaultBranchId;
-        if(authRole==='admin'){
+        if(authRole==='admin' || authRole==='warehouse'){
           const branchCodeVal = String(pick(row, ['رمز الفرع','الفرع','Branch Code','Branch','branch'])).trim();
           if(branchCodeVal){
             const matched = state.branches.find(b=>b.name===branchCodeVal || b.username===branchCodeVal);
@@ -2084,9 +2120,7 @@ let transferSearch = '';
 let transferRequestItem = null;
 
 function canApproveTransfer(t){
-  if(authRole==='admin') return true;
-  if(authRole==='warehouse') return t.fromBranchId===MAIN_WH_ID;
-  return authRole==='branch' && t.fromBranchId===state.authBranchId && t.fromBranchId!==MAIN_WH_ID;
+  return authRole==='admin' || authRole==='warehouse';   // sending stock out is never done by a branch
 }
 function canReceiveTransfer(t){
   if(authRole==='admin') return true;
@@ -2107,7 +2141,7 @@ function rejectTransfer(id){
 function cancelTransferRequest(id){
   const t = state.transfers.find(x=>x.id===id);
   if(!t || t.status!=='pending') return;
-  if(!(authRole==='admin' || (authRole==='branch' && t.toBranchId===state.authBranchId) || (authRole==='warehouse' && t.toBranchId===MAIN_WH_ID))){ alert(T('alertNoPermission')); return; }
+  if(!(authRole==='admin' || authRole==='warehouse' || (authRole==='branch' && t.toBranchId===state.authBranchId))){ alert(T('alertNoPermission')); return; }
   if(!confirm(T('confirmCancelTransfer'))) return;
   t.status = 'cancelled';
   t.cancelledAt = new Date().toISOString();
@@ -2127,7 +2161,7 @@ function openDirectTransferModal(invId){
   if(item.branchId===MAIN_WH_ID) dests = state.branches.map(b=>[b.id,b.name]);
   else{
     dests = [[MAIN_WH_ID, T('mainWarehouse')]];
-    if(authRole==='admin') dests = dests.concat(state.branches.filter(b=>b.id!==item.branchId).map(b=>[b.id,b.name]));
+    if(canManageStock()) dests = dests.concat(state.branches.filter(b=>b.id!==item.branchId).map(b=>[b.id,b.name]));
   }
   showModal(`
     <h3>${T('directTransferTitle')}</h3>
@@ -2187,7 +2221,7 @@ function renderTransfers(){
     .sort((a,b)=>new Date(a.requestedAt)-new Date(b.requestedAt));
 
   const all = [...state.transfers]
-    .filter(t=>authRole==='admin' || (authRole==='warehouse' && (t.toBranchId===MAIN_WH_ID || t.fromBranchId===MAIN_WH_ID)) || (myBranchId && (t.toBranchId===myBranchId || t.fromBranchId===myBranchId)))
+    .filter(t=>authRole==='admin' || authRole==='warehouse' || (myBranchId && (t.toBranchId===myBranchId || t.fromBranchId===myBranchId)))
     .sort((a,b)=>new Date(b.requestedAt)-new Date(a.requestedAt));
 
   return `
@@ -2253,7 +2287,7 @@ function renderTransfers(){
                 <td>${transferStatusBadge(t)}${t.direct?` <span class="status-badge badge-branch">${T('directLabel')}</span>`:''}</td>
                 <td>
                   ${t.status==='in_transit' && canReceiveTransfer(t) ? `<button class="btn btn-sm btn-primary" onclick="confirmReceiptTransfer('${t.id}')">${icon('check')} ${T('confirmReceiptBtn')}</button>` : ''}
-                  ${t.status==='pending' && (authRole==='admin' || t.toBranchId===myBranchId || (authRole==='warehouse' && t.toBranchId===MAIN_WH_ID)) ? `<button class="btn btn-sm btn-danger" onclick="cancelTransferRequest('${t.id}')">${icon('del')} ${T('cancelBtn')}</button>` : ''}
+                  ${t.status==='pending' && (authRole==='admin' || authRole==='warehouse' || t.toBranchId===myBranchId) ? `<button class="btn btn-sm btn-danger" onclick="cancelTransferRequest('${t.id}')">${icon('del')} ${T('cancelBtn')}</button>` : ''}
                 </td>
               </tr>
             `).join('')}
@@ -3307,6 +3341,9 @@ function attachPageHandlers(){
   if(cf) cf.onchange = (e)=>{ claimFilter = e.target.value; render(); };
   { const dr = document.querySelector('.topbar .date-range'), tb = document.querySelector('#pageContent .toolbar:not(.fc-toolbar)');
     if(dr && tb){ const first = tb.querySelector('input,select'); if(first && first.nextSibling) tb.insertBefore(dr, first.nextSibling); else tb.prepend(dr); dr.classList.add('in-toolbar'); } }
+  if(state.page==='dashboard'){ const pc = document.getElementById('pageContent'); if(pc) pc.insertAdjacentHTML('afterbegin', latePanelHtml()); }
+  if(state.page==='swaps' && authRole==='admin'){ const n = pendingVocCount(); const pc = document.getElementById('pageContent');
+    if(n && pc) pc.insertAdjacentHTML('afterbegin', `<div class="swap-pending-banner"><span>${TT(`${n} طلب سواب من المراكز بانتظار موافقتك`, `${n} SWAP request(s) from the centers waiting for your approval`)}</span><button class="btn btn-sm btn-primary" onclick="swapFilter='voc_pending';render();">${TT('اعرض الطلبات','Show requests')}</button></div>`); }
   const df = document.getElementById('deviceFilter');
   if(df) df.onchange = (e)=>{ deviceFilter = e.target.value; render(); };
   const dbf = document.getElementById('deviceBrandFilter');
@@ -4913,7 +4950,7 @@ function ticketCard(r, compact){
     <div class="ticket st-${stIdx+1}">
       <div class="ticket-top">
         <div>
-          <div class="ticket-device">${deviceLabel(r)} <span class="status-badge status-${stIdx+1}">${DL(r.status)}</span>${isSwapRepair(r)?`<span class="status-badge badge-swap">SWAP</span>`:''}${swapKindBadge(r)}${isRefundSwap(r)?`<span class="status-badge badge-quote-pending">${TT('تعويض مالي','Compensation')}${r.refundAmount?': '+money(r.refundAmount):''}</span>`:''}${r.warrantyStatus?`<span class="status-badge ${r.warrantyStatus==='ضمن الضمان'?'badge-warranty-in':'badge-warranty-out'}">${DL(r.warrantyStatus)}</span>`:''}${quoteBadge(r)}${(!isSwapRepair(r) && r.repairType)?`<span class="status-badge ${r.repairType==='part'?((r.partsUsed||[]).length?'badge-branch':'badge-quote-pending'):'badge-branch'}">${r.repairType==='part'?((r.partsUsed||[]).length?TT('تبديل قطعة','Part replacement'):TT('يحتاج قطعة — ما انصرفت بعد','Needs a part — not issued yet')):TT('سوفتوير','Software')}</span>`:''}${(!isSwapRepair(r) && boardActionOf(r))?`<span class="status-badge ${boardActionOf(r)==='replace'?(r.newImei?'badge-quote-ok':'badge-quote-pending'):'badge-branch'}">${boardActionOf(r)==='replace'?TT('تبديل بورد','Board replaced')+(r.newImei?'':' — '+TT('ينتظر IMEI جديد','needs new IMEI')):TT('تصليح بورد','Board repaired')}</span>`:''}${r.repeatOf?`<span class="status-badge badge-repeat" title="${TT('رجع خلال 30 يوم من الجوب','Returned within 30 days of job')} ${r.repeatOf}">${TT('راجع','Repeat')} ↺</span>`:''}${r.partArrivedAt && r.status===ST.PARTS?`<span class="status-badge badge-quote-ok">${TT('وصلت القطعة','Part arrived')} ✓</span>`:''}${r.branchId?`<span class="status-badge badge-branch">${branchName(r.branchId)}</span>`:''}</div>
+          <div class="ticket-device">${deviceLabel(r)} <span class="status-badge status-${stIdx+1}">${DL(r.status)}</span>${isSwapRepair(r)?`<span class="status-badge badge-swap">SWAP</span>`:''}${swapKindBadge(r)}${isRefundSwap(r)?`<span class="status-badge badge-quote-pending">${TT('تعويض مالي','Compensation')}${r.refundAmount?': '+money(r.refundAmount):''}</span>`:''}${r.warrantyStatus?`<span class="status-badge ${r.warrantyStatus==='ضمن الضمان'?'badge-warranty-in':'badge-warranty-out'}">${DL(r.warrantyStatus)}</span>`:''}${quoteBadge(r)}${(!isSwapRepair(r) && r.repairType)?`<span class="status-badge ${r.repairType==='part'?((r.partsUsed||[]).length?'badge-branch':'badge-quote-pending'):'badge-branch'}">${r.repairType==='part'?((r.partsUsed||[]).length?TT('تبديل قطعة','Part replacement'):TT('يحتاج قطعة — ما انصرفت بعد','Needs a part — not issued yet')):TT('سوفتوير','Software')}</span>`:''}${(!isSwapRepair(r) && boardActionOf(r))?`<span class="status-badge ${boardActionOf(r)==='replace'?(r.newImei?'badge-quote-ok':'badge-quote-pending'):'badge-branch'}">${boardActionOf(r)==='replace'?TT('تبديل بورد','Board replaced')+(r.newImei?'':' — '+TT('ينتظر IMEI جديد','needs new IMEI')):TT('تصليح بورد','Board repaired')}</span>`:''}${lateBadge(r)}${r.repeatOf?`<span class="status-badge badge-repeat" title="${TT('رجع خلال 30 يوم من الجوب','Returned within 30 days of job')} ${r.repeatOf}">${TT('راجع','Repeat')} ↺</span>`:''}${r.partArrivedAt && r.status===ST.PARTS?`<span class="status-badge badge-quote-ok">${TT('وصلت القطعة','Part arrived')} ✓</span>`:''}${r.branchId?`<span class="status-badge badge-branch">${branchName(r.branchId)}</span>`:''}</div>
           <div class="ticket-meta">${r.jobNo?`<span class="mono" style="font-weight:600;color:var(--violet-dark);">${T('jobCardNo')}: ${r.jobNo}</span> · `:''}${r.imei?('IMEI: '+r.imei+' · '):''}${r.newImei?(T('newImeiShort')+': '+r.newImei+' · '):''}<button class="link-btn" onclick="openCustomerHistory('${r.id}')" title="${TT('سجل الزبون','Customer history')}">${r.customerName}</button>${visits?` <span style="font-size:11px;color:var(--muted);">(${TT('زيارات سابقة','previous visits')}: ${visits})</span>`:''} · ${r.phone} · ${T('receivedOn')} ${fmtDate(r.createdAt)}${r.deliveredAt?' · '+T('deliveredOn')+' '+fmtDate(r.deliveredAt):''} · ${T('jobAgeLabel')}: ${jobAgeDays(r)} ${T('daysLabel')}${r.technician?' · '+T('technicianLabel')+' '+r.technician:''}${(!out && expiry)?` · ${TT('الضمان لغاية','Warranty until')} ${fmtISODate(expiry)}`:''}</div>
           ${(r.photoBefore||r.photoAfter)?`<div class="ticket-photos">
             ${r.photoBefore?`<a href="${r.photoBefore}" target="_blank" rel="noopener" class="ticket-photo-link"><img src="${r.photoBefore}" class="ticket-photo-thumb"><span>${T('photoBefore')}</span></a>`:''}
@@ -5018,7 +5055,7 @@ function openRepairModal(id){
         <button type="button" class="btn ${cur===WARRANTY_STATUSES[0]?'btn-primary':''}" data-w="${WARRANTY_STATUSES[0]}" onclick="setWarrantyChoice(this.dataset.w)">${icon('check')} ${TT('ضمن الضمان (مجاني — ينطالب من الشركة)','In warranty (free — claimed from the brand)')}</button>
         <button type="button" class="btn ${cur===WARRANTY_STATUSES[1]?'btn-primary':''}" data-w="${WARRANTY_STATUSES[1]}" onclick="setWarrantyChoice(this.dataset.w)">${TT('خارج الضمان (على حساب الزبون)','Out of warranty (customer pays)')}</button>
       </div>
-      <div style="font-size:11.5px;color:var(--muted);margin-top:4px;">${TT('اختاره عند الاستلام، وتكدر تغيره أثناء التصليح. جوبات «ضمن الضمان» بس تنحسب بمطالبات الضمان.','Choose it at intake; it can be changed during the repair. Only in-warranty jobs count toward warranty claims.')}</div>`; })()}
+      <div class="mhint" style="font-size:11.5px;color:var(--muted);margin-top:4px;">${TT('اختاره عند الاستلام، وتكدر تغيره أثناء التصليح. جوبات «ضمن الضمان» بس تنحسب بمطالبات الضمان.','Choose it at intake; it can be changed during the repair. Only in-warranty jobs count toward warranty claims.')}</div>`; })()}
     </div>
     <div id="warrantyInfo"></div>
     <div id="costBox" class="cost-box" style="display:${out?'block':'none'};">
@@ -5099,9 +5136,9 @@ function openRepairModal(id){
           <label style="font-size:12.5px;">${TT('IMEI الجديد (بعد تبديل البورد) · New IMEI','New IMEI (after board replacement) · IMEI الجديد')}</label>
           <input id="f_boardImei" class="mono" value="${editing&&boardActionOf(editing)==='replace'?(editing.newImei||''):''}" maxlength="17" inputmode="numeric" placeholder="${TT('15 رقم — إجباري قبل ما يطلع الجوب','15 digits — required before the job is completed')}">
         </div>
-        <div style="font-size:11.5px;color:var(--muted);margin-top:4px;">${TT('تبديل البورد يغيّر الـ IMEI، فلازم ينكتب الجديد قبل ما يكمل الجوب. تصليح البورد ما يحتاج IMEI جديد.','A board replacement changes the IMEI, so the new one is required before completion. A board repair keeps the IMEI.')}</div>
+        <div class="mhint" style="font-size:11.5px;color:var(--muted);margin-top:4px;">${TT('تبديل البورد يغيّر الـ IMEI، فلازم ينكتب الجديد قبل ما يكمل الجوب. تصليح البورد ما يحتاج IMEI جديد.','A board replacement changes the IMEI, so the new one is required before completion. A board repair keeps the IMEI.')}</div>
       </div>
-      <p style="font-size:11.5px;color:var(--muted);margin:4px 0 0;">${TT('القطعة تنصرف من المخزن أول ما تضيفها للجوب وتحفظ، وترجع للمخزن إذا انشالت أو انلغى الجوب. سعر القطعة تكتبه بيدك لكل جوب (خارج الضمان). إذا القطعة مو موجودة اطلبها من المخزن الرئيسي.','A part leaves stock as soon as you add it to the job and save, and returns if removed or the job is cancelled. Type the part price for each job (out of warranty). If a part is missing, request it from the main warehouse.')}</p>
+      <p class="mhint" style="font-size:11.5px;color:var(--muted);margin:4px 0 0;">${TT('القطعة تنصرف من المخزن أول ما تضيفها للجوب وتحفظ، وترجع للمخزن إذا انشالت أو انلغى الجوب. سعر القطعة تكتبه بيدك لكل جوب (خارج الضمان). إذا القطعة مو موجودة اطلبها من المخزن الرئيسي.','A part leaves stock as soon as you add it to the job and save, and returns if removed or the job is cancelled. Type the part price for each job (out of warranty). If a part is missing, request it from the main warehouse.')}</p>
     </div>
     </div>
     </div>
@@ -5405,6 +5442,7 @@ function renderInventory(){
   const invParts = [...new Set(partSrc.map(partKey).filter(Boolean))].sort(sortAr);
   if(invPartFilter && !invParts.includes(invPartFilter)) invPartFilter = '';
   let list = [...allInv];
+  if(invLowOnly) list = list.filter(p=>!p.defective && (Number(p.qty)||0)<=(Number(p.threshold)||0));
   if(invBrandFilter) list = list.filter(p=>brandKey(p)===invBrandFilter);
   if(invPartFilter) list = list.filter(p=>partKey(p)===invPartFilter);
   if(invSearch){
@@ -5433,6 +5471,7 @@ function renderInventory(){
       <span style="opacity:.75;font-size:13px;">${list.length} ${TT('صنف','items')} · ${T('colQty')}: ${list.reduce((a,p)=>a+(Number(p.qty)||0),0)}</span>` : ''}
       ${manage?`<input type="file" id="importInventoryInput" accept=".xlsx,.xls" style="display:none" onchange="handleImportInventory(event)">
       <button class="btn" onclick="document.getElementById('importInventoryInput').click()">${icon('receipt')} ${T('importExcel')}</button>`:''}
+      ${invLowOnly?`<button class="btn btn-sm" style="border-color:var(--red);color:var(--red);" onclick="invLowOnly=false;render();">✕ ${TT('بس القطع المنخفضة','Low stock only')}</button>`:''}
       <button class="btn" onclick="exportInventoryExcel()">${icon('receipt')} ${T('exportExcel')}</button>
       ${authRole!=='branch' ? `<button class="btn" onclick="invForecastOpen=true;render();">${icon('reports')} ${TT('توقع طلب القطع','Parts forecast')}</button>` : ''}
       ${authRole==='branch' ? `<button class="btn" onclick="setPage('transfers')">${icon('transfer')} ${T('requestFromMainBtn')}</button>` : ''}
@@ -5516,7 +5555,7 @@ function deletePart(id){
 function savePart(id){
   if(!canManageStock()){ alert(T('alertNoPermission')); return; }
   const existingPart = id ? state.inventory.find(p=>p.id===id) : null;
-  const branchId = authRole==='admin' ? document.getElementById('p_branch').value : (existingPart ? existingPart.branchId : MAIN_WH_ID);
+  const branchId = canManageStock() && document.getElementById('p_branch') ? document.getElementById('p_branch').value : (existingPart ? existingPart.branchId : MAIN_WH_ID);
   const code = document.getElementById('p_code').value.trim();
   let name = document.getElementById('p_name').value.trim();
   const brand = (document.getElementById('p_brand').value||'').trim();
@@ -5656,7 +5695,7 @@ function createDirectTransfer(){
   const qty = Number(document.getElementById('dt_qty').value)||0;
   const toBranchId = document.getElementById('dt_to').value;
   if(qty<=0 || qty>(Number(item.qty)||0) || !toBranchId || toBranchId===item.branchId){ alert(T('alertTransferQty')); return; }
-  if(authRole==='warehouse' && item.branchId!==MAIN_WH_ID && toBranchId!==MAIN_WH_ID){ alert(T('alertNoPermission')); return; }
+  // admin and main-warehouse accounts move stock between any branches
   const note = document.getElementById('dt_note').value.trim();
   const now = new Date().toISOString();
   const t = { id: uid(), itemId: item.id, code: item.code, name: item.name, brand: item.brand||'', partType: item.partType||'', model: item.model||'', costPrice: item.costPrice, sellPrice: item.sellPrice, defective: item.defective?true:undefined,
@@ -5890,7 +5929,7 @@ function showModal(html, opts){
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.id = 'modalOverlay';
-  overlay.innerHTML = `<div class="modal${opts && opts.wide ? ' modal-wide' : ''}">${html}</div>`;
+  overlay.innerHTML = opts && opts.wide ? `<div class="modal modal-wide"><div class="modal-fit">${html}</div></div>` : `<div class="modal">${html}</div>`;
   if(!(opts && opts.locked)){
     // close on a real click on the dark area only: a drag that starts inside the form and ends outside must not close it,
     // and the big job form only closes with its own buttons
@@ -5899,7 +5938,22 @@ function showModal(html, opts){
     overlay.onclick = (e)=>{ if(e.target===overlay && downOnOverlay && !(opts && opts.wide)) closeModal(); downOnOverlay = false; };
   }
   document.body.appendChild(overlay);
+  if(opts && opts.wide){
+    const refit = ()=> requestAnimationFrame(fitWideModal);
+    refit();
+    overlay.addEventListener('click', ()=> setTimeout(refit, 0));
+    overlay.addEventListener('change', ()=> setTimeout(refit, 0));
+    overlay.addEventListener('input', ()=> setTimeout(refit, 0));
+  }
 }
+// The job form must fit the window without scrolling: if it is taller than the window, shrink it (down to 70%)
+function fitWideModal(){
+  const m = document.querySelector('.modal.modal-wide'), f = m && m.querySelector('.modal-fit'); if(!f) return;
+  f.style.zoom = 1;
+  const avail = m.clientHeight, need = m.scrollHeight;
+  if(need > avail + 1){ f.style.zoom = Math.max(0.7, Math.floor(avail / need * 100) / 100); }
+}
+window.addEventListener('resize', ()=>{ if(document.querySelector('.modal.modal-wide')) fitWideModal(); });
 function closeModal(silent){
   const el = document.getElementById('modalOverlay');
   if(el) el.remove();
@@ -6426,7 +6480,7 @@ function openPartModal(id){
   showModal(`
     <h3>${editing?T('editPartTitle'):T('newPartTitle')}</h3>
     <div class="form-row"><label>${T('branchLabel')}</label>
-      ${authRole==='admin' ? `<select id="p_branch"><option value="${MAIN_WH_ID}" ${curBranch===MAIN_WH_ID?'selected':''}>${T('mainWarehouse')}</option>${state.branches.map(b=>`<option value="${b.id}" ${curBranch===b.id?'selected':''}>${b.name}</option>`).join('')}</select>`
+      ${canManageStock() ? `<select id="p_branch"><option value="${MAIN_WH_ID}" ${curBranch===MAIN_WH_ID?'selected':''}>${T('mainWarehouse')}</option>${state.branches.map(b=>`<option value="${b.id}" ${curBranch===b.id?'selected':''}>${b.name}</option>`).join('')}</select>`
         : `<input value="${branchName(curBranch)}" disabled>`}
     </div>
     <div class="form-2col">
@@ -6718,6 +6772,92 @@ function exportForecastExcel(){
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Forecast');
   XLSX.writeFile(wb, `parts-forecast-${FC.from}_${FC.to}.xlsx`);
+}
+/* =====================================================================
+   v1.9 — Late jobs: open for more than 24 hours, with the reason they wait
+   ===================================================================== */
+const LATE_HOURS = 24;
+let lateFilter = '';
+let invLowOnly = false;
+const LATE_REASONS = {
+  swap_approval:{ar:'بانتظار موافقة المدير (سواب)', en:'Waiting for admin SWAP approval', c:'#7c3aed'},
+  quote:        {ar:'بانتظار موافقة الزبون على السعر', en:'Waiting for the customer to approve the price', c:'#d97706'},
+  part:         {ar:'بانتظار قطعة', en:'Waiting for a part', c:'#dc2626'},
+  swap_device:  {ar:'بانتظار الجهاز البديل / IMEI جديد', en:'Waiting for the replacement device / new IMEI', c:'#9333ea'},
+  notify:       {ar:'مكتمل — ما انبلغ الزبون', en:'Repaired — customer not notified yet', c:'#2563eb'},
+  pickup:       {ar:'بانتظار الزبون يستلم', en:'Waiting for the customer to pick up', c:'#0891b2'},
+  tech:         {ar:'عند الفني — بدون سبب (بطء)', en:'With the technician — no blocker (slow)', c:'#475569'},
+};
+function lateReasonLabel(k){ const r = LATE_REASONS[k]; return r ? (lang==='ar' ? r.ar : r.en) : ''; }
+function jobHoursOpen(r){ return (Date.now() - new Date(r.createdAt).getTime()) / 36e5; }
+function stageSince(r){ const h = Array.isArray(r.statusHistory) && r.statusHistory.length ? r.statusHistory[r.statusHistory.length-1].at : (r.updatedAt || r.createdAt); return h || r.createdAt; }
+function isLateJob(r){ return !isClosedStatus(r.status) && jobHoursOpen(r) > LATE_HOURS; }
+function pendingReason(r){
+  if(isClosedStatus(r.status)) return '';
+  if(isSwapRepair(r)){
+    if(swapNeedsApproval(r) && (r.vocStatus||'pending')!=='approved') return 'swap_approval';
+    if(!r.newImei && !(typeof isRefundSwap==='function' && isRefundSwap(r) && (Number(r.refundAmount)||0)>0) && r.status!==ST.READY) return 'swap_device';
+  }
+  if(r.status===ST.READY) return 'pickup';
+  if(isOutWarranty(r) && (r.quoteStatus||'pending')==='pending' && r.status!==ST.DONE) return 'quote';
+  if(r.status===ST.PARTS) return 'part';
+  if(!isSwapRepair(r) && r.repairType==='part' && !(r.partsUsed||[]).some(p=>(Number(p.qty)||0)>0) && r.status!==ST.DONE) return 'part';
+  if(r.status===ST.DONE) return 'notify';
+  return 'tech';
+}
+function fmtWait(hours){ return hours >= 48 ? `${Math.floor(hours/24)} ${TT('يوم','days')}` : `${Math.floor(hours)} ${TT('ساعة','h')}`; }
+function lateJobs(){ return visibleRepairs().filter(isLateJob); }
+function lateCounts(){
+  const c = {}; let total = 0;
+  for(const r of lateJobs()){ const k = pendingReason(r); c[k] = (c[k]||0) + 1; total++; }
+  return {c, total};
+}
+function lateBadge(r){
+  if(!isLateJob(r)) return '';
+  const k = pendingReason(r), info = LATE_REASONS[k] || {};
+  const inStage = (Date.now() - new Date(stageSince(r)).getTime()) / 36e5;
+  return `<span class="status-badge late-badge" style="border-color:${info.c};color:${info.c};" title="${TT('مفتوح من','Open for')} ${fmtWait(jobHoursOpen(r))} · ${TT('بهذي المرحلة من','in this stage for')} ${fmtWait(inStage)}">⏱ ${fmtWait(jobHoursOpen(r))} · ${lateReasonLabel(k)}</span>`;
+}
+function applyLateFilter(list){
+  if(!lateFilter) return list;
+  if(lateFilter==='open') return list.filter(r=>!isClosedStatus(r.status));
+  if(lateFilter==='overdue7') return list.filter(r=>!isClosedStatus(r.status) && (Date.now()-new Date(r.createdAt).getTime())/864e5 > 7);
+  if(lateFilter==='late') return list.filter(isLateJob);
+  return list.filter(r=>isLateJob(r) && pendingReason(r)===lateFilter);
+}
+function lateFilterSelectHtml(){
+  const {c, total} = lateCounts();
+  return `<select id="lateFilter" onchange="lateFilter=this.value;render();" class="${lateFilter?'late-on':''}">
+    <option value="">${TT('كل الأجهزة (متأخرة وغير متأخرة)','All jobs (late or not)')}</option>
+    <option value="open" ${lateFilter==='open'?'selected':''}>${TT('المفتوحة بس (قيد الصيانة)','Open jobs only')}</option>
+    <option value="overdue7" ${lateFilter==='overdue7'?'selected':''}>${TT('متأخرة أكثر من 7 أيام','Over 7 days')}</option>
+    <option value="late" ${lateFilter==='late'?'selected':''}>⏱ ${TT('المتأخرة +24 ساعة','Late, over 24 h')} (${total})</option>
+    ${Object.keys(LATE_REASONS).filter(k=>c[k]).map(k=>`<option value="${k}" ${lateFilter===k?'selected':''}>— ${lateReasonLabel(k)} (${c[k]})</option>`).join('')}
+  </select>`;
+}
+function openLate(k){ lateFilter = k || 'late'; deviceFilter = ''; state.page = 'devices'; render(); }
+function latePanelHtml(){
+  const {c, total} = lateCounts();
+  const keys = Object.keys(LATE_REASONS);
+  return `<div class="panel late-panel">
+    <div class="late-head">
+      <div><h3 style="margin:0;font-size:16px;">⏱ ${TT('الأجهزة المتأخرة — مفتوحة أكثر من 24 ساعة','Late jobs — open for more than 24 hours')}</h3>
+      <div style="font-size:12.5px;color:var(--muted);">${TT('سبب التأخير حسب حالة كل جوب. اكبس على السبب حتى تشوف الأجهزة.','Why each job is waiting, from its state. Click a reason to see the jobs.')}</div></div>
+      <button class="late-total" onclick="openLate('late')"><span>${total}</span>${TT('جهاز متأخر','late jobs')}</button>
+    </div>
+    <div class="late-grid">${keys.map(k=>`<button class="late-chip ${c[k]?'':'zero'}" style="--lc:${LATE_REASONS[k].c}" onclick="openLate('${k}')" ${c[k]?'':'disabled'}><b>${c[k]||0}</b><span>${lateReasonLabel(k)}</span></button>`).join('')}</div>
+  </div>`;
+}
+
+// dashboard cards open the matching list
+function dashGo(kind, val){
+  lateFilter = ''; deviceFilter = ''; deviceTypeFilter = '';
+  if(kind==='status'){ deviceFilter = val; state.page = 'devices'; }
+  else if(kind==='late'){ lateFilter = val; state.page = 'devices'; }
+  else if(kind==='swaps'){ swapFilter = ''; state.page = 'swaps'; }
+  else if(kind==='low'){ invLowOnly = true; invForecastOpen = false; state.page = 'inventory'; }
+  else if(kind==='invoices'){ state.page = 'invoices'; }
+  render(); window.scrollTo(0,0);
 }
 
 loadAll();
