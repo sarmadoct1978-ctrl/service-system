@@ -509,6 +509,14 @@ details.hist table{margin-top:6px;}
 .date-range.in-toolbar{border-radius:12px;padding:9px 14px;background:#fff;font-size:13px;}
 .date-range.in-toolbar.on{background:#eef0ff;}
 .board-box{border:1px dashed var(--border,#e5e7eb);border-radius:10px;padding:10px 12px;margin:10px 0 6px;background:#fafbff;}
+.fc-controls{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-end;margin-top:12px;}
+.fc-controls label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);margin:0;}
+.fc-controls input,.fc-controls select{min-width:120px;}
+.fc-controls .fc-check{flex-direction:row;align-items:center;gap:6px;font-size:13px;color:var(--text);padding-bottom:8px;}
+.fc-quick{display:flex;gap:6px;padding-bottom:2px;}
+.fc-table th.num,.fc-table td.num{text-align:center;}
+.fc-table tr.fc-need td{background:#fff8ec;}
+.fc-table td.fc-order{font-weight:700;color:var(--violet-dark,#4338ca);font-size:14px;}
 .tickets{gap:6px !important;}
 .tickets .ticket{padding:8px 12px;gap:4px;}
 .tickets .ticket-top{gap:8px;}
@@ -3282,7 +3290,7 @@ function attachPageHandlers(){
   if(cb) cb.onchange = (e)=>{ claimBrand = e.target.value; render(); };
   const cf = document.getElementById('claimFilter');
   if(cf) cf.onchange = (e)=>{ claimFilter = e.target.value; render(); };
-  { const dr = document.querySelector('.topbar .date-range'), tb = document.querySelector('#pageContent .toolbar');
+  { const dr = document.querySelector('.topbar .date-range'), tb = document.querySelector('#pageContent .toolbar:not(.fc-toolbar)');
     if(dr && tb){ const first = tb.querySelector('input,select'); if(first && first.nextSibling) tb.insertBefore(dr, first.nextSibling); else tb.prepend(dr); dr.classList.add('in-toolbar'); } }
   const df = document.getElementById('deviceFilter');
   if(df) df.onchange = (e)=>{ deviceFilter = e.target.value; render(); };
@@ -5368,6 +5376,7 @@ let invPartFilter = '';
 let invTypeFilter = '';
 function invAttr(v){ return String(v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 function renderInventory(){
+  if(invForecastOpen) return renderForecast();
   const allInv = visibleInventory().filter(p=> invTypeFilter==='defective' ? p.defective : invTypeFilter==='parts' ? !p.defective : true);
   const UNB = '__none__';
   const brandKey = p => (p.brand||'').trim() || UNB;
@@ -5408,6 +5417,7 @@ function renderInventory(){
       ${manage?`<input type="file" id="importInventoryInput" accept=".xlsx,.xls" style="display:none" onchange="handleImportInventory(event)">
       <button class="btn" onclick="document.getElementById('importInventoryInput').click()">${icon('receipt')} ${T('importExcel')}</button>`:''}
       <button class="btn" onclick="exportInventoryExcel()">${icon('receipt')} ${T('exportExcel')}</button>
+      ${authRole!=='branch' ? `<button class="btn" onclick="invForecastOpen=true;render();">${icon('reports')} ${TT('توقع طلب القطع','Parts forecast')}</button>` : ''}
       ${authRole==='branch' ? `<button class="btn" onclick="setPage('transfers')">${icon('transfer')} ${T('requestFromMainBtn')}</button>` : ''}
       ${manage?`<button class="btn btn-primary" onclick="openPartModal()">${icon('plus')} ${T('addPart')}</button>`:''}
     </div>
@@ -6493,6 +6503,198 @@ function topFaults(repairs){
   const m = {};
   repairs.forEach(r=>(r.faults||[]).forEach(f=>{ m[f] = (m[f]||0)+1; }));
   return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,10);
+}
+/* =====================================================================
+   v1.9 — Spare-parts forecast (Inventory page)
+   The user picks the months the average is taken from, how many months to
+   cover and a safety margin. Consumption per part type + brand + model comes
+   from parts issued to jobs (stock movements) and, for jobs with no stock
+   movements (the old Excel data), from the fault of each repair.
+   ===================================================================== */
+let invForecastOpen = false;
+const FC = { from:'', to:'', horizon:3, safety:20, brand:'', type:'', onlyOrder:false };
+const FC_MAINBOARD = 'بوردة رئيسية';
+// fault keyword (old data and English fault names) -> part type; SWAP jobs use no part
+const FC_FAULT_PART = [
+  [/^(lcd|display|screen)|شاش|لمس|touch/i, 'شاشة'],
+  [/^(dead|restart|signal|water)|لا يشتغل|يطفي|شبكة|إشارة|اشارة|ماء|معلق على الشعار/i, FC_MAINBOARD],
+  [/^charg|شحن/i, 'منفذ / بورد الشحن'],
+  [/^(battery|overheat)|بطارية|يسخن/i, 'بطارية'],
+  [/^speaker|السماعة الخارجية/i, 'سماعة خارجية'],
+  [/السماعة الداخلية|earpiece/i, 'سماعة داخلية'],
+  [/^camera|الكاميرا الخلفية/i, 'كاميرا خلفية'],
+  [/الكاميرا الأمامية/i, 'كاميرا أمامية'],
+  [/مايك|^mic/i, 'مايك'],
+  [/بصمة|finger/i, 'بصمة'],
+  [/لا يقرأ الشريحة|sim/i, 'درج الشريحة'],
+];
+function fcMonthKey(iso){ const d = new Date(iso); if(isNaN(d)) return ''; return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+function fcDefaultRange(){
+  const now = new Date();
+  const end = new Date(now.getFullYear(), now.getMonth()-1, 1);      // last complete month
+  const start = new Date(end.getFullYear(), end.getMonth()-2, 1);    // three months back
+  const k = d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  return {from:k(start), to:k(end)};
+}
+function fcMonthsBetween(a, b){
+  if(!a || !b) return [];
+  const out = []; let [y, m] = a.split('-').map(Number); const [y2, m2] = b.split('-').map(Number);
+  while(y < y2 || (y===y2 && m<=m2)){ out.push(y+'-'+String(m).padStart(2,'0')); m++; if(m>12){ m=1; y++; } if(out.length>60) break; }
+  return out;
+}
+function fcFaultPart(r){
+  const txt = [...(r.faults||[]), String(r.issue||'').split(' — ')[0]].join(' | ');
+  for(const [re, t] of FC_FAULT_PART){ for(const piece of txt.split(' | ')){ if(re.test(piece.trim())) return t; } }
+  return '';
+}
+function fcKey(type, brand, model){
+  const sp = splitBrandModel(brand||'', model||'');
+  return [type||'', sp.key||String(brand||'').toLowerCase(), normModel(sp.model||model||'', brand)||''].join('|');
+}
+// consumption per key and month inside the chosen months
+function fcConsumption(months){
+  const set = new Set(months);
+  const branch = state.currentBranch;
+  const inScope = id=> branch==='all' || branch===MAIN_WH_ID || id===branch;
+  const rows = {};
+  const add = (type, brand, model, month, n, src)=>{
+    if(!type || !set.has(month)) return;
+    const k = fcKey(type, brand, model);
+    const row = rows[k] || (rows[k] = {k, type, brand: brandDisplayName(splitBrandModel(brand||'', model||'').key) || brand || '', model: splitBrandModel(brand||'', model||'').model || model || '', byMonth:{}, total:0, fromStock:0, fromFault:0});
+    row.byMonth[month] = (row.byMonth[month]||0) + n; row.total += n;
+    if(src==='stock') row.fromStock += n; else row.fromFault += n;
+  };
+  for(const r of state.repairs){
+    if(!inScope(r.branchId) || r.status===CANCELLED_STATUS) continue;
+    const month = fcMonthKey(r.createdAt);
+    if(!set.has(month)) continue;
+    const ded = jobDeducted(r);
+    const used = Object.entries(ded).filter(([,q])=>q>0);
+    if(used.length){
+      for(const [invId, q] of used){
+        const it = state.inventory.find(x=>x.id===invId); if(!it || it.defective) continue;
+        add(partTypeOf(it), it.brand || r.deviceBrand, it.model || r.deviceModel, month, q, 'stock');
+      }
+    }else if(!isSwapRepair(r) && r.repairType!=='software'){
+      // no stock movement (old data, or a job closed without issuing): estimate one part from the fault
+      const t = fcFaultPart(r);
+      if(t && (r.imported || r.repairType==='part' || isClosedStatus(r.status) || r.status===ST.DONE || r.status===ST.READY)) add(t, r.deviceBrand, r.deviceModel, month, 1, 'fault');
+    }
+  }
+  return rows;
+}
+function fcOnHand(){
+  const branch = state.currentBranch;
+  const map = {};
+  for(const p of state.inventory){
+    if(p.defective) continue;
+    if(!(branch==='all' || p.branchId===branch)) continue;
+    const t = partTypeOf(p); if(!t) continue;
+    const k = fcKey(t, p.brand, p.model);
+    const e = map[k] || (map[k] = {qty:0, codes:[]});
+    e.qty += Number(p.qty)||0; if(p.code && !e.codes.includes(p.code)) e.codes.push(p.code);
+  }
+  return map;
+}
+function forecastRows(){
+  if(!FC.from || !FC.to){ const d = fcDefaultRange(); FC.from = FC.from || d.from; FC.to = FC.to || d.to; }
+  const months = fcMonthsBetween(FC.from, FC.to);
+  const cons = fcConsumption(months);
+  const stock = fcOnHand();
+  const n = Math.max(1, months.length);
+  const keys = new Set([...Object.keys(cons)]);
+  const out = [];
+  for(const k of keys){
+    const c = cons[k];
+    const avg = c.total / n;
+    const need = avg * FC.horizon;
+    const safety = need * FC.safety / 100;
+    const on = stock[k] ? stock[k].qty : 0;
+    const order = Math.max(0, Math.ceil(need + safety - on));
+    out.push({...c, avg, need, safety, onHand: on, codes: stock[k] ? stock[k].codes : [], order});
+  }
+  let rows = out;
+  if(FC.brand) rows = rows.filter(r=>r.brand===FC.brand);
+  if(FC.type) rows = rows.filter(r=>r.type===FC.type);
+  if(FC.onlyOrder) rows = rows.filter(r=>r.order>0);
+  rows.sort((a,b)=> b.order-a.order || b.total-a.total || String(a.model).localeCompare(String(b.model)));
+  return {rows, months, all: out};
+}
+function setFC(k, v){
+  if(k==='horizon') v = Math.min(24, Math.max(1, Number(v)||1));
+  if(k==='safety') v = Math.min(300, Math.max(0, Number(v)||0));
+  if(k==='from' || k==='to'){ FC[k] = v; if(FC.from && FC.to && FC.from>FC.to){ const t = FC.from; FC.from = FC.to; FC.to = t; } }
+  else FC[k] = v;
+  render();
+}
+function fcQuick(nMonths){
+  const now = new Date(); const end = new Date(now.getFullYear(), now.getMonth()-1, 1); const start = new Date(end.getFullYear(), end.getMonth()-(nMonths-1), 1);
+  const k = d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  FC.from = k(start); FC.to = k(end); render();
+}
+function fmtQ(v){ return (Math.round(v*10)/10).toLocaleString('en-US'); }
+function renderForecast(){
+  const {rows, months, all} = forecastRows();
+  const showMonths = months.length<=6;
+  const brands = [...new Set(all.map(r=>r.brand).filter(Boolean))].sort();
+  const types = [...new Set(all.map(r=>r.type))].sort((a,b)=>a.localeCompare(b,'ar'));
+  const totOrder = rows.reduce((s,r)=>s+r.order,0), totNeed = rows.reduce((s,r)=>s+Math.ceil(r.need+r.safety),0);
+  const scope = state.currentBranch==='all' ? TT('كل الفروع + المخزن الرئيسي','All branches + main warehouse') : (state.currentBranch===MAIN_WH_ID ? T('mainWarehouse') : branchName(state.currentBranch));
+  const ml = m=>{ const [y, mo] = m.split('-'); return new Date(Number(y), Number(mo)-1, 1).toLocaleDateString(lang==='ar'?'ar-IQ':'en-GB', {month:'short', year:'2-digit'}); };
+  return `
+    <div class="toolbar fc-toolbar" style="align-items:flex-end;">
+      <button class="btn" onclick="invForecastOpen=false;render();">→ ${TT('رجوع للمخزون','Back to inventory')}</button>
+      <div style="flex:1;"></div>
+      <button class="btn btn-primary" onclick="exportForecastExcel()">${icon('receipt')} ${T('exportExcel')}</button>
+    </div>
+    <div class="panel fc-panel">
+      <div class="fc-head">
+        <div>
+          <h3 style="margin:0 0 2px;font-size:16px;">${TT('توقع طلب قطع الغيار','Spare-parts order forecast')}</h3>
+          <div style="font-size:12.5px;color:var(--muted);">${TT('النطاق:','Scope:')} <b>${scope}</b> · ${TT('غيّر الفرع من فوق','change the branch at the top')}</div>
+        </div>
+      </div>
+      <div class="fc-controls">
+        <label>${TT('احسب المعدل من شهر','Average from month')}<input type="month" value="${FC.from}" onchange="setFC('from', this.value)"></label>
+        <label>${TT('إلى شهر','to month')}<input type="month" value="${FC.to}" onchange="setFC('to', this.value)"></label>
+        <div class="fc-quick">${[3,6,12].map(n=>`<button type="button" class="btn btn-sm" onclick="fcQuick(${n})">${TT('آخر','Last')} ${n} ${TT('أشهر','months')}</button>`).join('')}</div>
+        <label>${TT('اطلب لكم شهر','Cover how many months')}<input type="number" min="1" max="24" value="${FC.horizon}" onchange="setFC('horizon', this.value)" style="width:80px;"></label>
+        <label>${TT('احتياطي أمان %','Safety stock %')}<input type="number" min="0" max="300" value="${FC.safety}" onchange="setFC('safety', this.value)" style="width:80px;"></label>
+        <label>${TT('البراند','Brand')}<select onchange="setFC('brand', this.value)"><option value="">${T('allBrands')}</option>${brands.map(b=>`<option ${FC.brand===b?'selected':''}>${b}</option>`).join('')}</select></label>
+        <label>${TT('نوع القطعة','Part type')}<select onchange="setFC('type', this.value)"><option value="">${TT('كل الأنواع','All types')}</option>${types.map(t=>`<option value="${t}" ${FC.type===t?'selected':''}>${biName(t)}</option>`).join('')}</select></label>
+        <label class="fc-check"><input type="checkbox" ${FC.onlyOrder?'checked':''} onchange="setFC('onlyOrder', this.checked)"> ${TT('بس اللي يحتاج طلب','Only items to order')}</label>
+      </div>
+      <div class="grid-auto" style="margin:12px 0;">
+        <div class="kpi tint-blue"><div class="kpi-top"><p class="kpi-label">${TT('أشهر الاحتساب','Months averaged')}</p></div><p class="kpi-value">${months.length}</p></div>
+        <div class="kpi tint-amber"><div class="kpi-top"><p class="kpi-label">${TT('الاحتياج المتوقع (مع الاحتياطي)','Expected need (with safety)')}</p></div><p class="kpi-value">${Math.round(totNeed).toLocaleString('en-US')}</p></div>
+        <div class="kpi tint-green"><div class="kpi-top"><p class="kpi-label">${TT('الكمية المقترح طلبها','Suggested order qty')}</p></div><p class="kpi-value">${totOrder.toLocaleString('en-US')}</p></div>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 10px;">${TT(`المعدل الشهري = الاستهلاك بالأشهر المختارة ÷ ${months.length}. الاحتياج = المعدل × ${FC.horizon} شهر + ${FC.safety}% احتياطي. المقترح = الاحتياج − الموجود بالمخزن. الاستهلاك من القطع المصروفة على الجوبات، وللجوبات القديمة (بدون صرف) من العطل؛ السواب ما ينحسب.`, `Monthly average = consumption in the chosen months ÷ ${months.length}. Need = average × ${FC.horizon} months + ${FC.safety}% safety. Suggested = need − on hand. Consumption comes from parts issued to jobs, and for old jobs with no issue from the fault; SWAP is not counted.`)}</p>
+      ${rows.length?`<div style="overflow-x:auto;"><table class="fc-table">
+        <thead><tr><th>${TT('نوع القطعة','Part type')}</th><th>${T('deviceBrand')}</th><th>${TT('الموديل','Model')}</th>
+          ${showMonths?months.map(m=>`<th class="num">${ml(m)}</th>`).join(''):''}
+          <th class="num">${TT('المجموع','Total')}</th><th class="num">${TT('المعدل/شهر','Avg/month')}</th><th class="num">${TT('الاحتياج','Need')}</th><th class="num">${TT('الموجود','On hand')}</th><th class="num">${TT('المقترح طلبه','Order')}</th></tr></thead>
+        <tbody>${rows.map(r=>`<tr class="${r.order>0?'fc-need':''}">
+          <td>${biName(r.type)}${r.codes.length?`<div class="mono" style="font-size:11px;color:var(--muted);">${r.codes.slice(0,3).join(' · ')}</div>`:''}</td>
+          <td>${r.brand||'-'}</td><td>${r.model||'-'}${r.fromFault&&!r.fromStock?` <span class="status-badge badge-branch" title="${TT('محسوب من العطل (داتا قديمة بدون صرف)','Estimated from the fault (old data, no stock issue)')}">${TT('من العطل','by fault')}</span>`:''}</td>
+          ${showMonths?months.map(m=>`<td class="num mono">${r.byMonth[m]||''}</td>`).join(''):''}
+          <td class="num mono">${r.total}</td><td class="num mono">${fmtQ(r.avg)}</td><td class="num mono">${Math.ceil(r.need + r.safety)}</td>
+          <td class="num mono">${r.onHand}</td><td class="num mono fc-order">${r.order||'—'}</td>
+        </tr>`).join('')}</tbody></table></div>`:emptyState(TT('ما في استهلاك بالأشهر المختارة','No consumption in the chosen months'), TT('غيّر الأشهر أو الفرع أو الفلاتر.','Change the months, branch or filters.'))}
+    </div>`;
+}
+function exportForecastExcel(){
+  if(typeof XLSX === 'undefined'){ alert(TT('تعذّر تحميل مكتبة التصدير، تحقق من الاتصال بالإنترنت.','Could not load the export library, check your internet connection.')); return; }
+  const {rows, months} = forecastRows();
+  const head = [TT('نوع القطعة','Part type'), 'Part type (EN)', T('deviceBrand'), TT('الموديل','Model'), TT('أكواد المخزن','Stock codes'), ...months, TT('المجموع','Total'), TT('المعدل/شهر','Avg/month'), TT('الاحتياج','Need'), TT('الموجود','On hand'), TT('المقترح طلبه','Order')];
+  const ws = XLSX.utils.aoa_to_sheet([
+    [TT('توقع طلب قطع الغيار','Spare-parts order forecast'), `${FC.from} → ${FC.to}`, `${TT('تغطية','Cover')} ${FC.horizon} ${TT('شهر','months')}`, `${TT('احتياطي','Safety')} ${FC.safety}%`],
+    [], head,
+    ...rows.map(r=>[r.type, enName(r.type), r.brand, r.model, r.codes.join(', '), ...months.map(m=>r.byMonth[m]||0), r.total, Math.round(r.avg*10)/10, Math.ceil(r.need + r.safety), r.onHand, r.order])
+  ]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Forecast');
+  XLSX.writeFile(wb, `parts-forecast-${FC.from}_${FC.to}.xlsx`);
 }
 
 loadAll();
