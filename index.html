@@ -554,6 +554,14 @@ details.hist table{margin-top:6px;}
 .pr-state{background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:6px 10px;font-size:12.5px;color:#3730a3;}
 .pr-none{background:#fff5f5;border:1px solid #fecaca;border-radius:10px;padding:10px 12px;color:#991b1b;font-size:13px;}
 .pr-receive{background:#059669 !important;border-color:#059669 !important;}
+.swap-layout{grid-template-columns:1fr !important;}
+.swap-detail{position:static !important;order:-1;border:1.5px solid #8b83f0;}
+.swap-detail:empty{display:none;}
+.swap-list{overflow-x:auto;}
+.swap-detail .swap-imei-box{max-width:760px;}
+.swap-dl{grid-template-columns:repeat(3, max-content minmax(0,1fr)) !important;gap:8px 16px !important;}
+@media (max-width:1150px){ .swap-dl{grid-template-columns:repeat(2, max-content minmax(0,1fr)) !important;} }
+@media (max-width:700px){ .swap-dl{grid-template-columns:max-content minmax(0,1fr) !important;} }
 .late-badge{background:#fff !important;border:1px solid;font-weight:600;}
 #lateFilter.late-on{border-color:#dc2626;background:#fff5f5;color:#991b1b;font-weight:600;}
 .late-panel{margin-bottom:16px;border:1.5px solid #fecaca;background:linear-gradient(180deg,#fff7f7,#fff);}
@@ -1708,7 +1716,7 @@ function filteredSwaps(){
   }
   return list;
 }
-function selectSwap(id){ selectedSwapId = id; render(); }
+function selectSwap(id){ selectedSwapId = selectedSwapId===id ? null : id; render(); const d = document.querySelector('.swap-detail'); if(d && selectedSwapId) d.scrollIntoView({behavior:'smooth', block:'start'}); }
 function openNewSwap(){
   openRepairModal();
   const st = document.getElementById('f_serviceType');
@@ -1767,7 +1775,7 @@ function renderSwaps(){
 function renderSwapDetail(r){
   const row = (k,v)=> `<dt>${k}</dt><dd>${(v===undefined||v===null||v==='')?'-':v}</dd>`;
   return `
-    <div class="panel-head"><h3>${T('swapDetailsTitle')}</h3><span class="mono" style="font-weight:600;color:var(--violet-dark);font-size:12.5px;">${r.jobNo||''}</span></div>
+    <div class="panel-head"><h3>${T('swapDetailsTitle')}</h3><span style="display:flex;gap:10px;align-items:center;"><span class="mono" style="font-weight:600;color:var(--violet-dark);font-size:12.5px;">${r.jobNo||''}</span><button class="btn btn-sm" onclick="selectedSwapId=null;render();" title="${TT('إغلاق التفاصيل','Close details')}">✕</button></span></div>
     <div class="swap-imei-box">
       <div class="swap-imei-card"><div class="lbl">${T('oldImeiLabel')}</div><div class="val">${r.imei||'-'}</div><div style="font-size:12px;color:var(--muted);margin-top:4px;">${deviceLabel(r)}</div></div>
       <div class="swap-arrow">${lang==='ar'?'←':'→'}</div>
@@ -5015,6 +5023,7 @@ function swapInvOptionsHtml(branchId, current){
 }
 function openRepairModal(id){
   modalPendingPartReq = null;
+  modalOpenedAt = new Date().toISOString();
   const editing = id ? state.repairs.find(r=>r.id===id) : null;
   if(editing && authRole==='branch' && editing.branchId!==state.authBranchId){ alert(T('alertNoPermission')); return; }
   modalPartsUsed = editing ? JSON.parse(JSON.stringify(editing.partsUsed||[])) : [];
@@ -5055,6 +5064,8 @@ function openRepairModal(id){
     </div>
     <div class="form-row"><label>IMEI</label><input id="f_imei" value="${editing?(editing.imei||''):''}" placeholder="${TT('15 رقم — من *#06# أو الكارتونة (إجباري قبل تخريج الجوب)','15 digits — from *#06# or the box (required before the job is completed)')}" maxlength="17" class="mono" oninput="updateImeiInfo()" inputmode="numeric"></div>
     <div id="imeiInfo"></div>
+    <div class="form-row"><label>${TT('تاريخ ووقت الاستلام · Received','Received on · تاريخ ووقت الاستلام')}</label>
+      <input id="f_receivedAt" type="datetime-local" value="${toLocalDT(editing ? editing.createdAt : new Date().toISOString())}" ${authRole==='admin'?'':'readonly'} title="${authRole==='admin'?TT('يتعبّى تلقائياً؛ المدير يكدر يصححه','Filled automatically; the admin can correct it'):TT('يتعبّى تلقائياً وقت فتح الجوب','Filled automatically when the job is opened')}"></div>
     <div class="form-row"><label>${TT('نوع العطل (اختار واحد أو أكثر)','Fault type (choose one or more)')}</label>
       ${(()=>{ const sel = editing ? (Array.isArray(editing.faults) ? editing.faults : faultsFromLegacy(editing.issue)) : []; return faultChipsHtml(sel); })()}
       <input id="f_issueNote" style="margin-top:8px;" placeholder="${TT('ملاحظة إضافية (اختياري) — مثل: سقط بالماي، يشتغل أحياناً','Extra note (optional) — e.g. dropped in water, works sometimes')}" value="${editing ? (Array.isArray(editing.faults) ? (editing.issueNote||'') : (faultsFromLegacy(editing.issue).length ? '' : (editing.issue||''))) : ''}"></div>
@@ -5222,6 +5233,8 @@ function updateWarrantyInfo(userChanged){
     if(w){ setWarrantyChoice(valid ? WARRANTY_STATUSES[0] : WARRANTY_STATUSES[1]); }
   }
 }
+let modalOpenedAt = '';
+function toLocalDT(iso){ const d = new Date(iso); if(isNaN(d)) return ''; const p = n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; }
 const REPAIR_TYPES = [
   {k:'part', ar:'تبديل قطعة (تنصرف قطعة من المخزن)', en:'Part replacement'},
   {k:'software', ar:'سوفتوير (بدون قطع)', en:'Software'},
@@ -5406,6 +5419,10 @@ async function saveRepair(id){
   const swapDate = swapDateVal ? new Date(swapDateVal+'T12:00:00').toISOString() : ((prevRec&&prevRec.swapDate&&newImei) ? prevRec.swapDate : (newImei ? new Date().toISOString() : ''));
   let swapRule = {fields:{}};
   if(swap){ swapRule = swapFieldsFromForm(prevRec, activationDate, newImei || (refundAmount ? 'refund' : '')); if(swapRule.error){ alert(swapRule.error); return; } }
+  // intake date/time: automatic; only the admin may correct it (e.g. a job entered late)
+  const recvIn = authRole==='admin' ? g('f_receivedAt') : '';
+  const receivedISO = recvIn && !isNaN(new Date(recvIn)) ? new Date(recvIn).toISOString() : '';
+  if(receivedISO && new Date(receivedISO) > new Date(Date.now()+5*60000)){ alert(TT('تاريخ الاستلام ما يصير بالمستقبل.','The received date cannot be in the future.')); return; }
   const repairType = g('f_repairType');
   const techNote = g('f_techNote').trim();
   { const dup = duplicatePartError(modalPartsUsed); if(dup){ alert(dup); return; } }
@@ -5456,10 +5473,14 @@ async function saveRepair(id){
       pushStatus(r, status, status===CANCELLED_STATUS ? r.cancelReason : '');
       if(status===CANCELLED_STATUS) r.cancelledAt = r.updatedAt;
     }else r.updatedAt = new Date().toISOString();
+    if(receivedISO && Math.abs(new Date(receivedISO) - new Date(r.createdAt)) > 60000){
+      if(Array.isArray(r.statusHistory) && r.statusHistory[0] && r.statusHistory[0].at===r.createdAt) r.statusHistory[0].at = receivedISO;
+      r.createdAt = receivedISO;
+    }
     if(imeiChanged){ const rep = findRepeatOf(imei, r.id, r.createdAt); r.repeatOf = rep ? (rep.jobNo||rep.id) : ''; }
     logAudit('repair_update', authRole, currentActorName(), `${T('auditDeviceUpdated')}: ${deviceBrand} ${deviceModel} (${r.jobNo||''})${statusChanged?' — '+T('auditStatusChangedTo')+' '+DL(status):''}`);
   }else{
-    const createdAt = new Date().toISOString();
+    const createdAt = receivedISO || modalOpenedAt || new Date().toISOString();
     const jobNo = await genJobNo(branchId, createdAt);
     const rep = findRepeatOf(imei, null, createdAt);
     r = Object.assign({id:newId, jobNo}, fields, {status, paid:false, createdAt, updatedAt:createdAt, deliveredAt: status===ST.DELIV ? createdAt : null, repeatOf: rep ? (rep.jobNo||rep.id) : '', statusHistory:[{s:status, at:createdAt, by:currentActorName(), note:''}]});
