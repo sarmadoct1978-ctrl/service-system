@@ -546,6 +546,8 @@ details.hist table{margin-top:6px;}
 .modal.modal-wide .modal-actions{position:sticky;bottom:0;z-index:5;background:#fff;margin:6px -22px 0;padding:10px 22px 12px;border-top:1px solid var(--line,#e5e7eb);box-shadow:0 -6px 14px rgba(20,33,61,.06);}
 .kpi-link{cursor:pointer;transition:transform .12s, box-shadow .12s;}
 .kpi-link:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(20,33,61,.10);}
+#f_techNote{width:100%;min-height:44px;resize:vertical;font-family:inherit;}
+#f_techNote.need{border-color:#f59e0b;background:#fffbeb;}
 .late-badge{background:#fff !important;border:1px solid;font-weight:600;}
 #lateFilter.late-on{border-color:#dc2626;background:#fff5f5;color:#991b1b;font-weight:600;}
 .late-panel{margin-bottom:16px;border:1.5px solid #fecaca;background:linear-gradient(180deg,#fff7f7,#fff);}
@@ -4408,6 +4410,7 @@ function needsPartError(r){
     if((r.softwareOps||[]).length || (r.partsUsed||[]).some(p=>(Number(p.qty)||0)>0)) return null;
     return TT('الإصلاح سوفتوير: اختار «سوفتوير» من قائمة أنواع القطع، وحدد شنو انسوى (تحديث، فلاش، FRP...) ودوس «إضافة» قبل ما تكمل الجوب.','Software repair: choose "Software" in the part-type list, pick the work done (update, flash, FRP...) and press "Add" before completing the job.');
   }
+  if(SERVICE_REPAIRS.includes(r.repairType)) return String(r.techNote||'').trim() ? null : TT(`نوع الإصلاح «${repairTypeLabel(r.repairType)}»: اكتب «شرح الفني» (شنو انسوى بالجهاز) قبل ما تكمل الجوب.`, `Repair type "${repairTypeLabel(r.repairType)}": write the technician notes (what was done) before completing the job.`);
   if(r.repairType!=='part') return null;
   if((r.partsUsed||[]).some(p=>(Number(p.qty)||0)>0)) return null;
   return TT('الجهاز يحتاج تبديل قطعة وما انصرفت له أي قطعة من المخزن.\nاختار القطعة من المخزن واصرفها أولاً، وإذا القطعة مو موجودة لازم تنضاف للمخزن (أو تنطلب من المخزن الرئيسي) قبل الصرف.\nإذا التصليح كان سوفتوير بس، غيّر «نوع الإصلاح» إلى سوفتوير.',
@@ -4950,7 +4953,7 @@ function ticketCard(r, compact){
     <div class="ticket st-${stIdx+1}">
       <div class="ticket-top">
         <div>
-          <div class="ticket-device">${deviceLabel(r)} <span class="status-badge status-${stIdx+1}">${DL(r.status)}</span>${isSwapRepair(r)?`<span class="status-badge badge-swap">SWAP</span>`:''}${swapKindBadge(r)}${isRefundSwap(r)?`<span class="status-badge badge-quote-pending">${TT('تعويض مالي','Compensation')}${r.refundAmount?': '+money(r.refundAmount):''}</span>`:''}${r.warrantyStatus?`<span class="status-badge ${r.warrantyStatus==='ضمن الضمان'?'badge-warranty-in':'badge-warranty-out'}">${DL(r.warrantyStatus)}</span>`:''}${quoteBadge(r)}${(!isSwapRepair(r) && r.repairType)?`<span class="status-badge ${r.repairType==='part'?((r.partsUsed||[]).length?'badge-branch':'badge-quote-pending'):'badge-branch'}">${r.repairType==='part'?((r.partsUsed||[]).length?TT('تبديل قطعة','Part replacement'):TT('يحتاج قطعة — ما انصرفت بعد','Needs a part — not issued yet')):TT('سوفتوير','Software')}</span>`:''}${(!isSwapRepair(r) && boardActionOf(r))?`<span class="status-badge ${boardActionOf(r)==='replace'?(r.newImei?'badge-quote-ok':'badge-quote-pending'):'badge-branch'}">${boardActionOf(r)==='replace'?TT('تبديل بورد','Board replaced')+(r.newImei?'':' — '+TT('ينتظر IMEI جديد','needs new IMEI')):TT('تصليح بورد','Board repaired')}</span>`:''}${lateBadge(r)}${r.repeatOf?`<span class="status-badge badge-repeat" title="${TT('رجع خلال 30 يوم من الجوب','Returned within 30 days of job')} ${r.repeatOf}">${TT('راجع','Repeat')} ↺</span>`:''}${r.partArrivedAt && r.status===ST.PARTS?`<span class="status-badge badge-quote-ok">${TT('وصلت القطعة','Part arrived')} ✓</span>`:''}${r.branchId?`<span class="status-badge badge-branch">${branchName(r.branchId)}</span>`:''}</div>
+          <div class="ticket-device">${deviceLabel(r)} <span class="status-badge status-${stIdx+1}">${DL(r.status)}</span>${isSwapRepair(r)?`<span class="status-badge badge-swap">SWAP</span>`:''}${swapKindBadge(r)}${isRefundSwap(r)?`<span class="status-badge badge-quote-pending">${TT('تعويض مالي','Compensation')}${r.refundAmount?': '+money(r.refundAmount):''}</span>`:''}${r.warrantyStatus?`<span class="status-badge ${r.warrantyStatus==='ضمن الضمان'?'badge-warranty-in':'badge-warranty-out'}">${DL(r.warrantyStatus)}</span>`:''}${quoteBadge(r)}${(!isSwapRepair(r) && r.repairType)?`<span class="status-badge ${r.repairType==='part'?((r.partsUsed||[]).length?'badge-branch':'badge-quote-pending'):'badge-branch'}">${r.repairType==='part'?((r.partsUsed||[]).length?TT('تبديل قطعة','Part replacement'):TT('يحتاج قطعة — ما انصرفت بعد','Needs a part — not issued yet')):repairTypeLabel(r.repairType)}</span>`:''}${(!isSwapRepair(r) && boardActionOf(r))?`<span class="status-badge ${boardActionOf(r)==='replace'?(r.newImei?'badge-quote-ok':'badge-quote-pending'):'badge-branch'}">${boardActionOf(r)==='replace'?TT('تبديل بورد','Board replaced')+(r.newImei?'':' — '+TT('ينتظر IMEI جديد','needs new IMEI')):TT('تصليح بورد','Board repaired')}</span>`:''}${lateBadge(r)}${r.repeatOf?`<span class="status-badge badge-repeat" title="${TT('رجع خلال 30 يوم من الجوب','Returned within 30 days of job')} ${r.repeatOf}">${TT('راجع','Repeat')} ↺</span>`:''}${r.partArrivedAt && r.status===ST.PARTS?`<span class="status-badge badge-quote-ok">${TT('وصلت القطعة','Part arrived')} ✓</span>`:''}${r.branchId?`<span class="status-badge badge-branch">${branchName(r.branchId)}</span>`:''}</div>
           <div class="ticket-meta">${r.jobNo?`<span class="mono" style="font-weight:600;color:var(--violet-dark);">${T('jobCardNo')}: ${r.jobNo}</span> · `:''}${r.imei?('IMEI: '+r.imei+' · '):''}${r.newImei?(T('newImeiShort')+': '+r.newImei+' · '):''}<button class="link-btn" onclick="openCustomerHistory('${r.id}')" title="${TT('سجل الزبون','Customer history')}">${r.customerName}</button>${visits?` <span style="font-size:11px;color:var(--muted);">(${TT('زيارات سابقة','previous visits')}: ${visits})</span>`:''} · ${r.phone} · ${T('receivedOn')} ${fmtDate(r.createdAt)}${r.deliveredAt?' · '+T('deliveredOn')+' '+fmtDate(r.deliveredAt):''} · ${T('jobAgeLabel')}: ${jobAgeDays(r)} ${T('daysLabel')}${r.technician?' · '+T('technicianLabel')+' '+r.technician:''}${(!out && expiry)?` · ${TT('الضمان لغاية','Warranty until')} ${fmtISODate(expiry)}`:''}</div>
           ${(r.photoBefore||r.photoAfter)?`<div class="ticket-photos">
             ${r.photoBefore?`<a href="${r.photoBefore}" target="_blank" rel="noopener" class="ticket-photo-link"><img src="${r.photoBefore}" class="ticket-photo-thumb"><span>${T('photoBefore')}</span></a>`:''}
@@ -4962,6 +4965,7 @@ function ticketCard(r, compact){
       <div class="ticket-issue">${r.issue}</div>
       ${r.forceClosed?`<div class="cancel-note" style="background:#fff4e5;color:#8a4b00;">${TT('أُخرج إجبارياً بواسطة','Force closed by')} ${r.forceClosed.by||''} — ${r.forceClosed.reason||''}</div>`:''}
       ${isCancelled?`<div class="cancel-note">${T('cancelledOn')} ${r.cancelledAt?fmtDate(r.cancelledAt):''}${r.cancelReason?' — '+T('cancelReasonLabel')+' '+r.cancelReason:''}</div>`:''}
+      ${(!compact && r.techNote) ? `<div class="ticket-meta"><b>${TT('شرح الفني:','Technician:')}</b> ${cleanText(r.techNote)}</div>` : ''}
       ${(!compact && (r.softwareOps||[]).length) ? `<div class="ticket-meta">${TT('السوفتوير:','Software:')} ${softwareOpsLabel(r.softwareOps)}</div>` : ''}
       ${(!compact && r.partsUsed && r.partsUsed.length) ? `<div class="ticket-meta">${T('partsUsedLabel')} ${r.partsUsed.map(p=>p.name+' ×'+p.qty).join('، ')}</div>` : ''}
       ${(!compact && linkedTr.length)?`<div class="ticket-meta">${TT('طلبات القطع:','Part requests:')} ${linkedTr.map(t=>`${t.name} ×${t.qty} ${transferStatusBadge(t)}`).join(' ')}</div>`:''}
@@ -5116,12 +5120,13 @@ function openRepairModal(id){
     </div>
     <div id="repairOnlyBox" style="display:${editing&&isSwapRepair(editing)?'none':'block'};">
     <div class="form-row"><label>${TT('نوع الإصلاح','Repair type')}</label>
-      <select id="f_repairType" onchange="this.dataset.manual='1'">
+      <select id="f_repairType" onchange="this.dataset.manual='1';onRepairTypeChange(this)" data-prev="${editing&&editing.repairType?editing.repairType:''}">
         <option value="" ${editing&&!editing.repairType?'selected':''}>${TT('— يحدده الفني بعد التشخيص —','— Set by the technician after diagnosis —')}</option>
-        <option value="part" ${editing&&editing.repairType==='part'?'selected':''}>${TT('تبديل قطعة (لازم تنصرف قطعة من المخزن قبل التسليم)','Part replacement (a part must be taken from stock before delivery)')}</option>
-        <option value="software" ${editing&&editing.repairType==='software'?'selected':''}>${TT('سوفتوير / بدون قطع (يطلع مباشرة)','Software / no parts (can be delivered directly)')}</option>
+        ${REPAIR_TYPES.map(t=>`<option value="${t.k}" ${editing&&editing.repairType===t.k?'selected':''}>${t.ar} · ${t.en}</option>`).join('')}
       </select></div>
-    <div class="form-row"><label>${TT('القطع أو السوفتوير المستخدم','Parts or software used')}</label>
+    <div class="form-row"><label>${TT('شرح الفني · Technician notes','Technician notes · شرح الفني')}</label>
+      <textarea id="f_techNote" rows="2" placeholder="${TT('شنو انسوى بالجهاز بالتفصيل (إجباري للتنظيف واللحام والكونكتر)','What was done to the device (required for cleaning, soldering and connector work)')}">${editing&&editing.techNote?cleanText(editing.techNote):''}</textarea></div>
+    <div class="form-row" id="partsRow"><label id="partsRowLabel">${TT('القطع أو السوفتوير المستخدم','Parts or software used')}</label>
       <div id="modalPartsList"></div>
       ${partPickerHtml()}
       <div id="boardBox" class="board-box">
@@ -5156,6 +5161,8 @@ function openRepairModal(id){
   updateCostBox();
   updateSwapRule();
   refreshPartSelect();
+  updateRepairTypeUI();
+  if(typeof fitWideModal==='function') requestAnimationFrame(fitWideModal);
 }
 function refreshModalBranchLists(){
   const sel = document.getElementById('f_branch');
@@ -5205,6 +5212,42 @@ function updateWarrantyInfo(userChanged){
     const w = document.getElementById('f_warranty');
     if(w){ setWarrantyChoice(valid ? WARRANTY_STATUSES[0] : WARRANTY_STATUSES[1]); }
   }
+}
+const REPAIR_TYPES = [
+  {k:'part', ar:'تبديل قطعة (تنصرف قطعة من المخزن)', en:'Part replacement'},
+  {k:'software', ar:'سوفتوير (بدون قطع)', en:'Software'},
+  {k:'cleaning', ar:'تنظيف', en:'Cleaning'},
+  {k:'soldering', ar:'لحام', en:'Soldering'},
+  {k:'connector', ar:'توصيل كونكتر', en:'Connector reseat'},
+];
+const SERVICE_REPAIRS = ['cleaning','soldering','connector'];      // hands-on work with no part: the technician's notes are required
+function repairTypeLabel(k){ const t = REPAIR_TYPES.find(x=>x.k===k); return t ? (k==='part' ? TT('تبديل قطعة','Part replacement') : k==='software' ? TT('سوفتوير','Software') : `${t.ar} · ${t.en}`) : ''; }
+// the parts picker shows only for a part replacement (software keeps a short list of software work); the board box for parts and soldering
+function updateRepairTypeUI(){
+  const rt = document.getElementById('f_repairType'); if(!rt) return;
+  const t = rt.value;
+  const row = document.getElementById('partsRow'), board = document.getElementById('boardBox');
+  if(row && board && board.parentElement===row) row.insertAdjacentElement('afterend', board);   // board box lives outside the parts list so it can show for soldering too
+  if(row) row.style.display = (t==='part' || t==='software') ? '' : 'none';
+  if(board) board.style.display = (t==='part' || t==='soldering' || t==='connector') ? '' : 'none';
+  const pt = document.getElementById('partType'), code = document.getElementById('partCode');
+  const lbl = document.getElementById('partsRowLabel'); if(lbl) lbl.textContent = t==='software' ? TT('السوفتوير اللي انسوى','Software work done') : TT('القطع المستخدمة','Parts used');
+  if(pt){
+    if(t==='software'){ if(pt.value!==SW_TYPE){ pt.value = SW_TYPE; refreshPartSelect(); } pt.style.display = 'none'; }
+    else { if(pt.value===SW_TYPE){ pt.value = ''; refreshPartSelect(); } pt.style.display = ''; }
+  }
+  if(code && code.parentElement) code.parentElement.style.display = t==='software' ? 'none' : '';
+  const note = document.getElementById('f_techNote'); if(note) note.classList.toggle('need', SERVICE_REPAIRS.includes(t));
+}
+function onRepairTypeChange(sel){
+  const t = sel.value, prev = sel.dataset.prev || '';
+  if(t!=='part' && modalPartsUsed.length){
+    if(!confirm(TT(`القطع المضافة (${modalPartsUsed.map(p=>p.name).join('، ')}) راح تنشال من الجوب وترجع للمخزن عند الحفظ. تكمل؟`, `The parts on this job (${modalPartsUsed.map(p=>p.name).join(', ')}) will be removed and returned to stock when you save. Continue?`))){ sel.value = prev; updateRepairTypeUI(); return; }
+    modalPartsUsed.length = 0; renderModalParts();
+  }
+  if(t!=='software' && modalSoftware.length){ modalSoftware.length = 0; renderModalParts(); }
+  sel.dataset.prev = t;
+  updateRepairTypeUI();
 }
 function setBoardAction(v){
   const h = document.getElementById('f_boardAction'); if(!h) return;
@@ -5355,9 +5398,11 @@ async function saveRepair(id){
   let swapRule = {fields:{}};
   if(swap){ swapRule = swapFieldsFromForm(prevRec, activationDate, newImei || (refundAmount ? 'refund' : '')); if(swapRule.error){ alert(swapRule.error); return; } }
   const repairType = g('f_repairType');
+  const techNote = g('f_techNote').trim();
   { const dup = duplicatePartError(modalPartsUsed); if(dup){ alert(dup); return; } }
-  const fields = {boardAction, customerName, phone, branchId, deviceBrand, deviceModel, imei, issue, faults, issueNote, repairType, estCost, laborCost, quoteStatus, technician, serviceType, warrantyStatus, activationDate, warrantyMonths, warrantyExpiry, newImei, newDeviceModel, swapDate, swapNote, swapInvId, partsUsed: JSON.parse(JSON.stringify(modalPartsUsed)), softwareOps: [...modalSoftware], photoBefore:modalPhotoBefore, photoAfter:modalPhotoAfter};
+  const fields = {techNote, boardAction, customerName, phone, branchId, deviceBrand, deviceModel, imei, issue, faults, issueNote, repairType, estCost, laborCost, quoteStatus, technician, serviceType, warrantyStatus, activationDate, warrantyMonths, warrantyExpiry, newImei, newDeviceModel, swapDate, swapNote, swapInvId, partsUsed: JSON.parse(JSON.stringify(modalPartsUsed)), softwareOps: [...modalSoftware], photoBefore:modalPhotoBefore, photoAfter:modalPhotoAfter};
   Object.assign(fields, swapRule.fields);
+  if(!swap){ if(repairType!=='part') fields.partsUsed = []; if(repairType!=='software') fields.softwareOps = []; }
   if(swap){
     fields.swapResolution = swapResolution; fields.refundAmount = refundAmount;
     fields.refundDate = refundAmount ? (refundDateVal ? new Date(refundDateVal+'T12:00:00').toISOString() : ((prevRec&&prevRec.refundDate) || new Date().toISOString())) : '';
@@ -5735,7 +5780,7 @@ function claimRows(){
   return visibleRepairs().filter(r=>!isOutWarranty(r) && [ST.DONE, ST.READY, ST.DELIV].includes(r.status)).map(r=>{
     const ded = jobDeducted(r);
     let lines = Object.entries(ded).filter(([,q])=>q>0).map(([invId,q])=>{ const it = state.inventory.find(x=>x.id===invId); return {name: it?it.name:invId, qty:q, cost: it?(Number(it.costPrice)||0):0}; });
-    let kind = isSwapRepair(r) ? 'swap' : (lines.length ? 'part' : (r.repairType==='software' ? 'software' : ''));
+    let kind = isSwapRepair(r) ? 'swap' : (lines.length ? 'part' : (r.repairType==='software' ? 'software' : (SERVICE_REPAIRS.includes(r.repairType) ? 'service' : '')));
     // jobs imported from the old Excel sheets have no stock movements: the fault tells the part (or software)
     if(r.imported && !kind){
       const fault = String(r.issue||'').split(' — ')[0].trim();
@@ -5761,7 +5806,7 @@ function setClaimFee(kind, val){
   logAudit('warranty_claim', authRole, currentActorName(), `${TT('أجور الخدمة الافتراضية','Default service fee')} ${claimKindLabel(kind)}: ${money(serviceLists.claimFees[kind])}`);
   render();
 }
-const CLAIM_KIND = { part:['تبديل قطعة','Part'], software:['سوفتوير','Software'], swap:['SWAP','SWAP'] };
+const CLAIM_KIND = { part:['تبديل قطعة','Part'], software:['سوفتوير','Software'], service:['خدمة فنية (تنظيف/لحام/كونكتر)','Service (cleaning/soldering/connector)'], swap:['SWAP','SWAP'] };
 function claimKindLabel(k){ return (CLAIM_KIND[k]||['',''])[lang==='ar'?0:1]; }
 function setClaimLabor(id, val){
   if(authRole!=='admin') return;
@@ -5790,7 +5835,7 @@ function renderClaims(){
     ${authRole==='admin'?`<div class="panel" style="padding:12px 14px;margin-bottom:12px;">
       <div style="font-weight:600;margin-bottom:8px;">${TT('أجور الخدمة (Service fees) الافتراضية لكل جوب','Default service fee per job')}</div>
       <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;">
-        ${['part','software','swap'].map(k=>`<label style="display:flex;align-items:center;gap:6px;margin:0;">${claimKindLabel(k)} <input type="text" inputmode="numeric" value="${claimFee(k)?money(claimFee(k)):''}" style="width:110px;" onchange="setClaimFee('${k}', this.value)"></label>`).join('')}
+        ${['part','software','service','swap'].map(k=>`<label style="display:flex;align-items:center;gap:6px;margin:0;">${claimKindLabel(k)} <input type="text" inputmode="numeric" value="${claimFee(k)?money(claimFee(k)):''}" style="width:110px;" onchange="setClaimFee('${k}', this.value)"></label>`).join('')}
       </div>
       <div style="font-size:11.5px;color:var(--muted);margin-top:6px;">${TT('تنطبق على كل جوب ما معدّل أجوره يدوياً. بالـ SWAP الجهاز البديل من الشركة، فتنحسب أجور الخدمة بس.','Applies to every job without a manual fee. For SWAP the replacement comes from the company, so only the service fee counts.')}</div>
     </div>`:''}
@@ -5819,7 +5864,7 @@ function renderClaims(){
           <td>${branchName(x.r.branchId)}</td><td>${deviceLabel(x.r)}${isSwapRepair(x.r)?' <span class="status-badge badge-swap">SWAP</span>':''}</td>
           <td class="mono" style="font-size:12px;">${x.r.imei||'-'}${x.r.newImei?`<div>→ ${x.r.newImei}</div>`:''}</td>
           <td><span class="status-badge ${x.kind==='swap'?'badge-swap':(x.kind==='software'?'badge-quote-pending':'badge-branch')}">${claimKindLabel(x.kind)}</span></td>
-          <td style="font-size:12.5px;">${x.r.imported?`<span class="status-badge badge-branch" title="${TT('من ملف الإكسل القديم — القطعة من العطل وسعرها غير مسجل','From the old Excel file — part taken from the fault, cost not recorded')}">Excel</span> `:''}${x.lines.map(l=>`${l.name} ×${l.qty}`).join('، ')||(x.kind==='software'?(softwareOpsLabel(x.r.softwareOps)||TT('بدون قطع','No parts')):'-')}${x.kind==='swap'?(x.r.swapResolution==='refund'?`<div style="font-size:11.5px;font-weight:600;">${TT('تعويض مالي للزبون:','Money compensation:')} ${money(x.r.refundAmount||0)}</div>`:`<div style="font-size:11px;color:var(--muted);">${TT('الجهاز البديل من الشركة — ما ينحسب','Replacement from the company — not counted')}</div>`):''}</td>
+          <td style="font-size:12.5px;">${x.r.imported?`<span class="status-badge badge-branch" title="${TT('من ملف الإكسل القديم — القطعة من العطل وسعرها غير مسجل','From the old Excel file — part taken from the fault, cost not recorded')}">Excel</span> `:''}${x.lines.map(l=>`${l.name} ×${l.qty}`).join('، ')||(x.kind==='software'?(softwareOpsLabel(x.r.softwareOps)||TT('بدون قطع','No parts')):(x.kind==='service'?repairTypeLabel(x.r.repairType)+(x.r.techNote?`<div style="font-size:11px;color:var(--muted);">${cleanText(x.r.techNote)}</div>`:''):'-'))}${x.kind==='swap'?(x.r.swapResolution==='refund'?`<div style="font-size:11.5px;font-weight:600;">${TT('تعويض مالي للزبون:','Money compensation:')} ${money(x.r.refundAmount||0)}</div>`:`<div style="font-size:11px;color:var(--muted);">${TT('الجهاز البديل من الشركة — ما ينحسب','Replacement from the company — not counted')}</div>`):''}</td>
           <td>${authRole==='admin'?`<input type="text" inputmode="numeric" value="${x.labor?money(x.labor):''}" placeholder="0" style="width:90px;${x.custom?'':'color:var(--muted);'}" title="${x.custom?TT('معدّلة يدوياً','Set manually'):TT('الأجور الافتراضية','Default fee')}" onchange="setClaimLabor('${x.r.id}', this.value)">`:`<span class="mono">${money(x.labor)}</span>`}</td>
           <td class="mono">${money(x.value)}</td>
           <td>${authRole==='admin'?`<select onchange="setClaimStatus('${x.r.id}', this.value)">${Object.keys(CLAIM_LABELS).map(k=>`<option value="${k}" ${(x.r.claimStatus||'')===k?'selected':''}>${CLAIM_LABELS[k][lang==='ar'?0:1]}</option>`).join('')}</select>`:CLAIM_LABELS[x.r.claimStatus||''][lang==='ar'?0:1]}</td>
@@ -6257,6 +6302,7 @@ function onFaultChange(el){
     const needsPart = sel.some(n=>{ const f = faultList().find(x=>x.n===n); return f && f.p && f.p!==''; });
     const soft = sel.length && sel.every(n=>/سوفتوير|FRP|تحديث/.test(n));
     rt.value = needsPart ? 'part' : (soft ? 'software' : rt.value);
+    rt.dataset.prev = rt.value; updateRepairTypeUI();
   }
   const pt = document.getElementById('partType');
   if(pt && !pt.value){
@@ -6456,7 +6502,7 @@ function addPartByCode(){
   const brand = (document.getElementById('f_deviceBrand')||{}).value||'';
   const model = (document.getElementById('f_deviceModel')||{}).value||'';
   if(!partFit(here, '', brand, model) && !confirm(TT(`«${here.name}» مسجلة لجهاز ثاني (${[here.brand, here.model].filter(Boolean).join(' ')||'-'}) والجهاز ${[brand, model].filter(Boolean).join(' ')}. تضيفها رغم هذا؟`, `"${here.name}" is registered for another device (${[here.brand, here.model].filter(Boolean).join(' ')||'-'}) but this job is ${[brand, model].filter(Boolean).join(' ')}. Add it anyway?`))) return;
-  if(addModalPart(here.id)){ el.value = ''; const rt = document.getElementById('f_repairType'); if(rt){ rt.value = 'part'; rt.dataset.manual = '1'; } }
+  if(addModalPart(here.id)){ el.value = ''; const rt = document.getElementById('f_repairType'); if(rt){ rt.value = 'part'; rt.dataset.manual = '1'; rt.dataset.prev = 'part'; updateRepairTypeUI(); } }
 }
 function addPickedItem(){
   const type = (document.getElementById('partType')||{}).value||'';
