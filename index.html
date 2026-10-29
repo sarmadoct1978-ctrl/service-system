@@ -645,6 +645,10 @@ details.hist table{margin-top:6px;}
   .nav-btn{justify-content:center;}
   .content,.topbar{padding-left:18px;padding-right:18px;}
 }
+.badge-na{background:#fff1e0;color:#b25b00;border:1px solid #f3c58a;}
+.na-check{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;font-weight:600;cursor:pointer;color:#b25b00;}
+.na-check input{width:auto;margin:0;}
+.live-clock{font-variant-numeric:tabular-nums;white-space:nowrap;}
 </style>
 </head>
 <body>
@@ -657,142 +661,7 @@ details.hist table{margin-top:6px;}
   </div>
   <div class="main">
     <div id="syncBar"></div>
-    <div id="root" class="">
-    <div class="topbar">
-      <div><h1>لوحة التحكم</h1><p>نظرة عامة على حالة الورشة اليوم</p></div>
-      <div class="topbar-right">
-        <span class="date-chip">الخميس، ١٦ تموز ٢٠٢٦</span>
-        <div class="lang-switch">
-          <button class="lang-btn active" id="langAr">AR</button>
-          <button class="lang-btn " id="langEn">EN</button>
-        </div>
-      </div>
-    </div>
-    <div class="content" id="pageContent">
-    <div class="grid-auto">
-      <div class="kpi"><div class="kpi-top"><p class="kpi-label">أجهزة قيد الصيانة</p><div class="kpi-icon violet"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"></rect><path d="M11 18h2"></path></svg></div></div><p class="kpi-value">20</p></div>
-      <div class="kpi"><div class="kpi-top"><p class="kpi-label">إيراد اليوم</p><div class="kpi-icon green"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="M7 15l4-5 3 3 5-7"></path></svg></div></div><p class="kpi-value">325,000</p></div>
-      <div class="kpi"><div class="kpi-top"><p class="kpi-label">إجمالي الإيرادات المسددة</p><div class="kpi-icon green"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="M7 15l4-5 3 3 5-7"></path></svg></div></div><p class="kpi-value">325,000</p></div>
-      <div class="kpi"><div class="kpi-top"><p class="kpi-label">قطع منخفضة المخزون</p><div class="kpi-icon violet"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8l9 5 9-5Z"></path><path d="M3 8v8l9 5 9-5V8"></path></svg></div></div><p class="kpi-value">0</p></div>
-      <div class="kpi"><div class="kpi-top"><p class="kpi-label">أجهزة الاستبدال</p><div class="kpi-icon violet"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8l9 5 9-5Z"></path><path d="M3 8v8l9 5 9-5V8"></path></svg></div></div><p class="kpi-value">0</p></div>
-    </div>
-    <div class="panel">
-      <div class="panel-head"><h3>توزيع الأجهزة حسب الحالة</h3></div>
-      <div class="status-grid">
-        
-          <div class="kpi status-kpi">
-            <div class="kpi-top"><p class="kpi-label">استلام</p><div class="kpi-icon red"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"></rect><path d="M11 18h2"></path></svg></div></div>
-            <p class="kpi-value">8</p>
-          </div>
-        
-          <div class="kpi status-kpi">
-            <div class="kpi-top"><p class="kpi-label">تشخيص</p><div class="kpi-icon amber"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"></rect><path d="M11 18h2"></path></svg></div></div>
-            <p class="kpi-value">4</p>
-          </div>
-        
-          <div class="kpi status-kpi">
-            <div class="kpi-top"><p class="kpi-label">قيد الإصلاح</p><div class="kpi-icon amber"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"></rect><path d="M11 18h2"></path></svg></div></div>
-            <p class="kpi-value">1</p>
-          </div>
-        
-          <div class="kpi status-kpi">
-            <div class="kpi-top"><p class="kpi-label">انتظار قطع</p><div class="kpi-icon red"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"></rect><path d="M11 18h2"></path></svg></div></div>
-            <p class="kpi-value">2</p>
-          </div>
-        
-          <div class="kpi status-kpi">
-            <div class="kpi-top"><p class="kpi-label">مكتملة الإصلاح</p><div class="kpi-icon violet"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"></rect><path d="M11 18h2"></path></svg></div></div>
-            <p class="kpi-value">2</p>
-          </div>
-        
-          <div class="kpi status-kpi">
-            <div class="kpi-top"><p class="kpi-label">انتظار استلام الزبون</p><div class="kpi-icon violet"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"></rect><path d="M11 18h2"></path></svg></div></div>
-            <p class="kpi-value">3</p>
-          </div>
-        
-          <div class="kpi status-kpi">
-            <div class="kpi-top"><p class="kpi-label">تم التسليم</p><div class="kpi-icon green"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"></rect><path d="M11 18h2"></path></svg></div></div>
-            <p class="kpi-value">8</p>
-          </div>
-        
-      </div>
-    </div>
-    <div class="panel">
-      <div class="panel-head"><h3>أحدث الأجهزة المستلمة</h3><button class="btn btn-primary" onclick="setPage(&#39;devices&#39;)"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg> استلام جهاز</button></div>
-      <div class="tickets">
-    <div class="ticket st-6">
-      <div class="ticket-top">
-        <div>
-          <div class="ticket-device">Oukitel c2 128+4 black <span class="status-badge status-6">انتظار استلام الزبون</span><span class="status-badge badge-warranty-in">ضمن الضمان</span></div>
-          <div class="ticket-meta">IMEI: 358021532685033 · ابو جعفر · 7702184693 · استلم في 16/07/2026</div>
-        </div>
-        <div class="ticket-price">0 د.ع</div>
-      </div>
-      <div class="ticket-issue">software</div>
-      
-      
-      
-    </div>
-  
-    <div class="ticket st-6">
-      <div class="ticket-top">
-        <div>
-          <div class="ticket-device">Oukitel Tablet OT5 S 256 <span class="status-badge status-6">انتظار استلام الزبون</span><span class="status-badge badge-warranty-out">خارج الضمان</span></div>
-          <div class="ticket-meta">IMEI: 358793610627844 · زبون خارجي · 7707893013 · استلم في 16/07/2026</div>
-        </div>
-        <div class="ticket-price">100,000 د.ع<div class="unpaid" style="font-size:11.5px;margin-top:3px;">مفوترة</div></div>
-      </div>
-      <div class="ticket-issue">شاشه</div>
-      
-      
-      
-    </div>
-  
-    <div class="ticket st-5">
-      <div class="ticket-top">
-        <div>
-          <div class="ticket-device">Oukitel c61 265 blue <span class="status-badge status-5">مكتملة الإصلاح</span><span class="status-badge badge-warranty-out">خارج الضمان</span></div>
-          <div class="ticket-meta">IMEI: 354864752582271 · سيد حيدر · 7810005854 · استلم في 16/07/2026</div>
-        </div>
-        <div class="ticket-price">45,000 د.ع<div class="unpaid" style="font-size:11.5px;margin-top:3px;">مفوترة</div></div>
-      </div>
-      <div class="ticket-issue">شاشه</div>
-      
-      
-      
-    </div>
-  
-    <div class="ticket st-5">
-      <div class="ticket-top">
-        <div>
-          <div class="ticket-device">Oukitel c17 128 silver <span class="status-badge status-5">مكتملة الإصلاح</span><span class="status-badge badge-warranty-in">ضمن الضمان</span></div>
-          <div class="ticket-meta">IMEI: 357211870148717 · عدي الصدرين · 7713184667 · استلم في 16/07/2026</div>
-        </div>
-        <div class="ticket-price">0 د.ع</div>
-      </div>
-      <div class="ticket-issue">طافي</div>
-      
-      
-      
-    </div>
-  
-    <div class="ticket st-7">
-      <div class="ticket-top">
-        <div>
-          <div class="ticket-device">Oukitel c61 265 GOLD <span class="status-badge status-7">تم التسليم</span><span class="status-badge badge-warranty-in">ضمن الضمان</span></div>
-          <div class="ticket-meta">IMEI: 354864753758177 · نبراس · 7703595577 · استلم في 16/07/2026</div>
-        </div>
-        <div class="ticket-price">0 د.ع</div>
-      </div>
-      <div class="ticket-issue">بورد شحن</div>
-      
-      
-      
-    </div>
-  </div>
-    </div>
-  </div>
-  </div>
+    <div id="root"></div>
   </div>
 </div>
 <div id="printArea"></div>
@@ -906,7 +775,7 @@ const STR = {
     partsUsedLabel:'القطع المستخدمة:', receivedOn:'استلم في', technicianLabel:'الفني:',
     nextStage:'نقل للحالة التالية', edit:'تعديل', printReceiptBtn:'طباعة الوصل', printInvoiceBtn:'طباعة الفاتورة', printJobCardBtn:'طباعة بطاقة العمل', createInvoiceBtn:'إنشاء فاتورة', delete:'حذف',
     editDeviceTitle:'تعديل بيانات الجهاز', newDeviceTitle:'استلام جهاز جديد',
-    customerName:'اسم الزبون', phone:'رقم الهاتف', deviceModel:'موديل الجهاز', deviceModelPh:'مثال: C62 128+4 أسود', deviceBrand:'البراند', deviceBrandPh:'مثال: Oukitel', xlModel:'الموديل', xlReceivedDate:'تاريخ الاستلام', xlDeliveredDate:'تاريخ التسليم', xlJobAge:'عمر الطلب (يوم)', jobAgeLabel:'عمر الطلب', deliveredOn:'سُلِّم في', kpiAvgJobAge:'متوسط عمر الطلب حتى التسليم', allBrands:'كل البراندات', brandDistribution:'الأجهزة حسب البراند والموديل', brandsSheet:'البراندات', unknownBrand:'غير محدد', alertBrandRequired:'الرجاء اختيار البراند (الشركة المصنعة) للجهاز', alertModelRequired:'الرجاء اختيار موديل الجهاز', passwordSavedMsg:'تم حفظ كلمة المرور الجديدة للفرع', passwordHidden:'(محفوظة ومشفّرة)', chooseBrand:'— اختر البراند —', chooseModel:'— اختر الموديل —', chooseBrandFirst:'اختر البراند أولاً', addModelLink:'إضافة موديل', newBrandPrompt:'اسم البراند الجديد:', newModelPrompt:'اسم الموديل الجديد', multiModelHint:'يمكنك كتابة أكثر من موديل مفصولة بفاصلة', catalogTitle:'البراندات والموديلات', catalogHint:'هذه القائمة تظهر كخيارات عند استلام جهاز. أضف أو احذف البراندات والموديلات من هنا (المدير فقط). حذف موديل لا يؤثر على الجوبات المسجلة سابقاً.', addBrandBtn:'إضافة براند', noModelsYet:'لا توجد موديلات بعد', confirmRemoveModel:'حذف الموديل من القائمة', confirmRemoveBrand:'حذف البراند وكل موديلاته من القائمة',
+    customerName:'اسم الزبون', agentName:'اسم الوكيل', xlAgent:'الوكيل', xlNotActive:'Not Active', phone:'رقم الهاتف', deviceModel:'موديل الجهاز', deviceModelPh:'مثال: C62 128+4 أسود', deviceBrand:'البراند', deviceBrandPh:'مثال: Oukitel', xlModel:'الموديل', xlReceivedDate:'تاريخ الاستلام', xlDeliveredDate:'تاريخ التسليم', xlJobAge:'عمر الطلب (يوم)', jobAgeLabel:'عمر الطلب', deliveredOn:'سُلِّم في', kpiAvgJobAge:'متوسط عمر الطلب حتى التسليم', allBrands:'كل البراندات', brandDistribution:'الأجهزة حسب البراند والموديل', brandsSheet:'البراندات', unknownBrand:'غير محدد', alertBrandRequired:'الرجاء اختيار البراند (الشركة المصنعة) للجهاز', alertModelRequired:'الرجاء اختيار موديل الجهاز', passwordSavedMsg:'تم حفظ كلمة المرور الجديدة للفرع', passwordHidden:'(محفوظة ومشفّرة)', chooseBrand:'— اختر البراند —', chooseModel:'— اختر الموديل —', chooseBrandFirst:'اختر البراند أولاً', addModelLink:'إضافة موديل', newBrandPrompt:'اسم البراند الجديد:', newModelPrompt:'اسم الموديل الجديد', multiModelHint:'يمكنك كتابة أكثر من موديل مفصولة بفاصلة', catalogTitle:'البراندات والموديلات', catalogHint:'هذه القائمة تظهر كخيارات عند استلام جهاز. أضف أو احذف البراندات والموديلات من هنا (المدير فقط). حذف موديل لا يؤثر على الجوبات المسجلة سابقاً.', addBrandBtn:'إضافة براند', noModelsYet:'لا توجد موديلات بعد', confirmRemoveModel:'حذف الموديل من القائمة', confirmRemoveBrand:'حذف البراند وكل موديلاته من القائمة',
     imeiPh:'15 رقم', issueDesc:'وصف العطل', estCost:'التكلفة التقديرية', technician:'الفني المسؤول',
     status:'الحالة', serviceType:'نوع العملية', warrantyStatus:'حالة الضمان',
     partsFromInventory:'القطع المستخدمة من المخزون', available:'متوفر', addPartBtn:'إضافة',
@@ -1054,7 +923,7 @@ const STR = {
     partsUsedLabel:'Parts used:', receivedOn:'Received on', technicianLabel:'Technician:',
     nextStage:'Move to next stage', edit:'Edit', printReceiptBtn:'Print receipt', printInvoiceBtn:'Print invoice', printJobCardBtn:'Print job card', createInvoiceBtn:'Create invoice', delete:'Delete',
     editDeviceTitle:'Edit device details', newDeviceTitle:'Receive new device',
-    customerName:'Customer name', phone:'Phone number', deviceModel:'Device model', deviceModelPh:'e.g. C62 128+4 black', deviceBrand:'Brand', deviceBrandPh:'e.g. Oukitel', xlModel:'Model', xlReceivedDate:'Received date', xlDeliveredDate:'Delivered date', xlJobAge:'Job age (days)', jobAgeLabel:'Job age', deliveredOn:'Delivered on', kpiAvgJobAge:'Average job age until delivery', allBrands:'All brands', brandDistribution:'Devices by brand and model', brandsSheet:'Brands', unknownBrand:'Unspecified', alertBrandRequired:'Please choose the device brand (manufacturer)', alertModelRequired:'Please choose the device model', passwordSavedMsg:'New password saved for branch', passwordHidden:'(saved, encrypted)', chooseBrand:'— Choose brand —', chooseModel:'— Choose model —', chooseBrandFirst:'Choose a brand first', addModelLink:'Add model', newBrandPrompt:'New brand name:', newModelPrompt:'New model name', multiModelHint:'you can enter several models separated by commas', catalogTitle:'Brands & models', catalogHint:'This list appears as options when receiving a device. Add or remove brands and models here (admin only). Removing a model does not affect existing job cards.', addBrandBtn:'Add brand', noModelsYet:'No models yet', confirmRemoveModel:'Remove model from the list', confirmRemoveBrand:'Remove the brand and all its models from the list',
+    customerName:'Customer name', agentName:'Agent / dealer name', xlAgent:'Agent', xlNotActive:'Not Active', phone:'Phone number', deviceModel:'Device model', deviceModelPh:'e.g. C62 128+4 black', deviceBrand:'Brand', deviceBrandPh:'e.g. Oukitel', xlModel:'Model', xlReceivedDate:'Received date', xlDeliveredDate:'Delivered date', xlJobAge:'Job age (days)', jobAgeLabel:'Job age', deliveredOn:'Delivered on', kpiAvgJobAge:'Average job age until delivery', allBrands:'All brands', brandDistribution:'Devices by brand and model', brandsSheet:'Brands', unknownBrand:'Unspecified', alertBrandRequired:'Please choose the device brand (manufacturer)', alertModelRequired:'Please choose the device model', passwordSavedMsg:'New password saved for branch', passwordHidden:'(saved, encrypted)', chooseBrand:'— Choose brand —', chooseModel:'— Choose model —', chooseBrandFirst:'Choose a brand first', addModelLink:'Add model', newBrandPrompt:'New brand name:', newModelPrompt:'New model name', multiModelHint:'you can enter several models separated by commas', catalogTitle:'Brands & models', catalogHint:'This list appears as options when receiving a device. Add or remove brands and models here (admin only). Removing a model does not affect existing job cards.', addBrandBtn:'Add brand', noModelsYet:'No models yet', confirmRemoveModel:'Remove model from the list', confirmRemoveBrand:'Remove the brand and all its models from the list',
     imeiPh:'15 digits', issueDesc:'Issue description', estCost:'Estimated cost', technician:'Assigned technician',
     status:'Status', serviceType:'Service type', warrantyStatus:'Warranty status',
     partsFromInventory:'Parts used from inventory', available:'available', addPartBtn:'Add',
@@ -1452,6 +1321,22 @@ function render(){
   try{ renderSyncBar(); }catch(e){}
   if(_focus){ const el = document.getElementById(_focus.id); if(el && el!==document.activeElement){ el.focus(); try{ el.setSelectionRange(_focus.s, _focus.e); }catch(e){} } }
 }
+function liveClockText(){
+  const d = new Date(), loc = lang==='ar' ? 'ar-IQ' : 'en-GB';
+  return d.toLocaleDateString(loc,{weekday:'long',year:'numeric',month:'long',day:'numeric'}) + ' · ' + d.toLocaleTimeString(loc,{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+let _clockDay = todayISO();
+function tickLiveClock(){
+  const el = document.getElementById('liveClock'); if(el) el.textContent = liveClockText();
+  const day = todayISO();
+  if(day!==_clockDay){
+    // the computer's date changed (midnight, or the laptop woke from sleep): refresh "today" numbers
+    if(typeof modalIsOpen==='function' && modalIsOpen()) return;
+    _clockDay = day; try{ if(state.ready) render(); }catch(e){}
+  }
+}
+setInterval(tickLiveClock, 1000);
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) tickLiveClock(); });
 function renderInner(){
   const root = document.getElementById('root');
   if(!state.ready){ root.innerHTML = `<div class="loading">${T('loading')}</div>`; return; }
@@ -1551,7 +1436,8 @@ function renderInner(){
           ${state.branches.map(b=>`<option value="${b.id}" ${state.currentBranch===b.id?'selected':''}>${b.name}</option>`).join('')}
         </select>
         ` : `<span class="branch-chip">${icon('branch')} ${authRole==='admin'?T('adminModeLabel'):branchName(state.authBranchId)}</span>`}
-        ${['branches','audit'].includes(state.page) ? `<span class="date-chip">${dateStr}</span>` : dateRangeHtml()}
+        ${['branches','audit'].includes(state.page) ? '' : dateRangeHtml()}
+        <span class="date-chip live-clock" id="liveClock" title="${TT('الوقت والتاريخ حسب ساعة هذا الجهاز','Date and time from this computer\'s clock')}">${liveClockText()}</span>
         <div class="lang-switch">
           <button class="lang-btn ${lang==='ar'?'active':''}" id="langAr">AR</button>
           <button class="lang-btn ${lang==='en'?'active':''}" id="langEn">EN</button>
@@ -1666,7 +1552,7 @@ function filteredDevicesList(){
   if(deviceBrandFilter) list = list.filter(r=>(r.deviceBrand||'').toLowerCase()===deviceBrandFilter.toLowerCase());
   if(deviceSearch){
     const q = deviceSearch.toLowerCase();
-    list = list.filter(r=> (r.customerName+r.phone+(r.deviceBrand||'')+' '+r.deviceModel+(r.imei||'')+(r.jobNo||'')).toLowerCase().includes(q));
+    list = list.filter(r=> (r.customerName+(r.agentName||'')+(r.notActive?'not active':'')+r.phone+(r.deviceBrand||'')+' '+r.deviceModel+(r.imei||'')+(r.jobNo||'')).toLowerCase().includes(q));
   }
   return list;
 }
@@ -1712,7 +1598,7 @@ function filteredSwaps(){
   if(swapFilter==='defect') list = list.filter(r=>r.swapKind==='defect');
   if(swapSearch){
     const q = swapSearch.toLowerCase();
-    list = list.filter(r=>(r.customerName+(r.phone||'')+(r.deviceBrand||'')+' '+r.deviceModel+(r.newDeviceModel||'')+(r.imei||'')+(r.newImei||'')+(r.jobNo||'')).toLowerCase().includes(q));
+    list = list.filter(r=>(r.customerName+(r.agentName||'')+(r.notActive?'not active':'')+(r.phone||'')+(r.deviceBrand||'')+' '+r.deviceModel+(r.newDeviceModel||'')+(r.imei||'')+(r.newImei||'')+(r.jobNo||'')).toLowerCase().includes(q));
   }
   return list;
 }
@@ -1759,7 +1645,7 @@ function renderSwaps(){
             ${list.map(r=>`
               <tr class="${r.id===selectedSwapId?'selected':''}" onclick="selectSwap('${r.id}')">
                 <td class="mono" style="font-size:12px;">${r.jobNo||'-'}</td>
-                <td>${deviceLabel(r)}<div style="font-size:12px;color:var(--muted);">${r.customerName}</div>${r.swapKind?`<div style="margin-top:4px;">${swapKindBadge(r)}</div>`:''}</td>
+                <td>${deviceLabel(r)}<div style="font-size:12px;color:var(--muted);">${r.customerName}${r.agentName?` · ${agentLine(r)}`:''}</div>${(r.swapKind||r.notActive)?`<div style="margin-top:4px;">${notActiveBadge(r)}${swapKindBadge(r)}</div>`:''}</td>
                 <td class="mono" style="font-size:12.5px;">${r.imei||'-'}</td>
                 <td class="mono" style="font-size:12.5px;">${r.newImei?r.newImei:`<span class="swap-pending">${T('swapNotYet')}</span>`}</td>
                 <td>${swapStatusBadge(r)}</td>
@@ -1785,13 +1671,14 @@ function renderSwapDetail(r){
       ${row(T('status'), swapStatusBadge(r))}
       ${row(T('colBranch'), branchName(r.branchId))}
       ${row(T('receivedOn'), fmtDate(r.createdAt))}
-      ${row(TT('تاريخ التفعيل','Activation date'), r.activationDate?fmtISODate(r.activationDate):'')}
+      ${row(TT('تاريخ التفعيل','Activation date'), r.notActive?notActiveBadge(r):(r.activationDate?fmtISODate(r.activationDate):''))}
       ${row(TT('نوع الاستبدال','Swap type'), r.swapKind ? swapKindBadge(r) : '')}
       ${swapNeedsApproval(r)?row(TT('ملاحظة المدير','Admin note'), [r.vocNote, r.vocBy?(r.vocBy+' · '+(r.vocAt?fmtDate(r.vocAt):'')):''].filter(Boolean).join(' — ')):''}
       ${row(T('swapDateLabel'), r.swapDate?fmtDate(r.swapDate):'')}
       ${row(T('xlDeliveredDate'), r.deliveredAt?fmtDate(r.deliveredAt):'')}
       ${row(T('jobAgeLabel'), jobAgeDays(r)+' '+T('daysLabel'))}
       ${row(T('xlCustomer'), r.customerName)}
+      ${row(T('xlAgent'), r.agentName?attrSafe(r.agentName):'')}
       ${row(T('xlPhone'), r.phone)}
       ${row(T('deviceBrand'), r.deviceBrand)}
       ${row(T('xlModel'), r.deviceModel)}
@@ -1825,8 +1712,8 @@ function exportSwapsExcel(){
   const list = filteredSwaps();
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet([
-    [T('jobCardNo'), T('colBranch'), T('xlReceivedDate'), T('swapDateLabel'), T('xlDeliveredDate'), T('xlJobAge'), T('xlCustomer'), T('xlPhone'), T('deviceBrand'), T('xlModel'), T('oldImeiLabel'), T('newImeiLabel'), T('newDeviceModelLabel'), T('xlIssue'), T('status'), T('xlWarranty'), T('xlCost'), T('xlTechnician'), T('swapNoteLabel'), TT('تاريخ التفعيل','Activation date'), TT('أيام من التفعيل','Days from activation'), TT('نوع الاستبدال','Swap type'), TT('موافقة المدير','Admin approval'), TT('ملاحظة المدير','Admin note'), TT('طريقة الاستبدال','Resolution'), TT('مبلغ التعويض','Compensation')],
-    ...list.map(r=>[r.jobNo||'', branchName(r.branchId), fmtDate(r.createdAt), r.swapDate?fmtDate(r.swapDate):'', r.deliveredAt?fmtDate(r.deliveredAt):'', jobAgeDays(r), r.customerName||'', String(r.phone||''), r.deviceBrand||'', r.deviceModel||'', String(r.imei||''), String(r.newImei||''), r.newDeviceModel||'', r.issue||'', DL(r.status), DL(r.warrantyStatus||WARRANTY_STATUSES[0]), Number(r.estCost)||0, r.technician||'', r.swapNote||'', r.activationDate?fmtISODate(r.activationDate):'', (r.swapDays===undefined?'':r.swapDays), r.swapKind==='defect'?TT('عيب مصنعي','Defect'):r.swapKind==='voc'?'VOC':'', swapNeedsApproval(r)?({approved:TT('موافق','Approved'),rejected:TT('مرفوض','Rejected')}[r.vocStatus]||TT('بانتظار','Pending')):'', r.vocNote||'', isRefundSwap(r)?TT('تعويض مالي','Compensation'):TT('جهاز بديل','Replacement'), isRefundSwap(r)?(Number(r.refundAmount)||0):''])
+    [T('jobCardNo'), T('colBranch'), T('xlReceivedDate'), T('swapDateLabel'), T('xlDeliveredDate'), T('xlJobAge'), T('xlCustomer'), T('xlAgent'), T('xlPhone'), T('deviceBrand'), T('xlModel'), T('oldImeiLabel'), T('newImeiLabel'), T('newDeviceModelLabel'), T('xlIssue'), T('status'), T('xlWarranty'), T('xlCost'), T('xlTechnician'), T('swapNoteLabel'), TT('تاريخ التفعيل','Activation date'), TT('أيام من التفعيل','Days from activation'), TT('نوع الاستبدال','Swap type'), TT('موافقة المدير','Admin approval'), TT('ملاحظة المدير','Admin note'), TT('طريقة الاستبدال','Resolution'), TT('مبلغ التعويض','Compensation')],
+    ...list.map(r=>[r.jobNo||'', branchName(r.branchId), fmtDate(r.createdAt), r.swapDate?fmtDate(r.swapDate):'', r.deliveredAt?fmtDate(r.deliveredAt):'', jobAgeDays(r), r.customerName||'', r.agentName||'', String(r.phone||''), r.deviceBrand||'', r.deviceModel||'', String(r.imei||''), String(r.newImei||''), r.newDeviceModel||'', r.issue||'', DL(r.status), DL(r.warrantyStatus||WARRANTY_STATUSES[0]), Number(r.estCost)||0, r.technician||'', r.swapNote||'', r.notActive?'Not Active':(r.activationDate?fmtISODate(r.activationDate):''), (r.swapDays===undefined?'':r.swapDays), r.swapKind==='defect'?TT('عيب مصنعي','Defect'):r.swapKind==='voc'?'VOC':'', swapNeedsApproval(r)?({approved:TT('موافق','Approved'),rejected:TT('مرفوض','Rejected')}[r.vocStatus]||TT('بانتظار','Pending')):'', r.vocNote||'', isRefundSwap(r)?TT('تعويض مالي','Compensation'):TT('جهاز بديل','Replacement'), isRefundSwap(r)?(Number(r.refundAmount)||0):''])
   ]);
   ws['!cols'] = [{wch:24},{wch:14},{wch:13},{wch:13},{wch:13},{wch:12},{wch:22},{wch:14},{wch:12},{wch:22},{wch:18},{wch:18},{wch:22},{wch:28},{wch:18},{wch:14},{wch:12},{wch:16},{wch:26}];
   XLSX.utils.book_append_sheet(wb, ws, 'SWAP');
@@ -1834,7 +1721,7 @@ function exportSwapsExcel(){
 }
 
 /* ---------------- DEVICES (JOB CARDS) EXCEL IMPORT / EXPORT ---------------- */
-const DEVICE_XL_COLS = ['jobCardNo','colBranch','xlReceivedDate','xlDeliveredDate','xlJobAge','xlCustomer','xlPhone','deviceBrand','xlModel','xlImei','newImeiLabel','xlIssue','status','xlType','xlWarranty','xlCost','xlTechnician','xlPaid'];
+const DEVICE_XL_COLS = ['jobCardNo','colBranch','xlReceivedDate','xlDeliveredDate','xlJobAge','xlCustomer','xlPhone','deviceBrand','xlModel','xlImei','newImeiLabel','xlIssue','status','xlType','xlWarranty','xlCost','xlTechnician','xlPaid','xlAgent','xlNotActive'];
 function exportDevicesExcel(){
   if(typeof XLSX === 'undefined'){ alert(lang==='ar'?'تعذّر تحميل مكتبة التصدير، تحقق من الاتصال بالإنترنت.':'Could not load the export library, check your internet connection.'); return; }
   const list = filteredDevicesList();
@@ -1844,10 +1731,10 @@ function exportDevicesExcel(){
     ...list.map(r=>[
       r.jobNo||'', branchName(r.branchId), fmtDate(r.createdAt), r.deliveredAt?fmtDate(r.deliveredAt):'', jobAgeDays(r), r.customerName||'', String(r.phone||''), r.deviceBrand||'', r.deviceModel||'',
       String(r.imei||''), String(r.newImei||''), r.issue||'', DL(r.status), DL(r.serviceType||SERVICE_TYPES[0]), DL(r.warrantyStatus||WARRANTY_STATUSES[0]),
-      Number(r.estCost)||0, r.technician||'', r.paid?T('yes'):T('no')
+      Number(r.estCost)||0, r.technician||'', r.paid?T('yes'):T('no'), r.agentName||'', r.notActive?T('yes'):''
     ])
   ]);
-  ws['!cols'] = [{wch:24},{wch:14},{wch:13},{wch:13},{wch:12},{wch:22},{wch:14},{wch:12},{wch:22},{wch:18},{wch:18},{wch:30},{wch:18},{wch:16},{wch:14},{wch:12},{wch:16},{wch:8}];
+  ws['!cols'] = [{wch:24},{wch:14},{wch:13},{wch:13},{wch:12},{wch:22},{wch:14},{wch:12},{wch:22},{wch:18},{wch:18},{wch:30},{wch:18},{wch:16},{wch:14},{wch:12},{wch:16},{wch:8},{wch:18},{wch:10}];
   XLSX.utils.book_append_sheet(wb, ws, T('xlDevicesSheet'));
   const dateStamp = new Date().toISOString().slice(0,10);
   XLSX.writeFile(wb, `job-cards-${dateStamp}.xlsx`);
@@ -1889,6 +1776,7 @@ function importDevicesExcel(evt){
         const jobNo = txt(row,'jobCardNo');
         if(!txt(row,'xlCustomer') && !txt(row,'xlModel') && !txt(row,'xlDevice') && !jobNo) continue; // empty line
         const customerName = txt(row,'xlCustomer');
+        const agentName = txt(row,'xlAgent');
         const phone = txt(row,'xlPhone');
         let deviceModel = txt(row,'xlModel') || txt(row,'xlDevice');
         let deviceBrand = txt(row,'deviceBrand') || txt(row,'xlBrand');
@@ -1912,6 +1800,7 @@ function importDevicesExcel(evt){
           if(authRole==='branch' && existing.branchId!==state.authBranchId){ skipped++; continue; }
           const upd = {};
           if(customerName) upd.customerName = customerName;
+          if(agentName) upd.agentName = agentName;
           if(phone) upd.phone = phone;
           if(deviceModel) upd.deviceModel = deviceModel;
           if(deviceBrand) upd.deviceBrand = deviceBrand;
@@ -1945,7 +1834,7 @@ function importDevicesExcel(evt){
         const cancelReason = String(row['سبب الإلغاء']||row['Cancel reason']||'').trim();
         const newJobNo = jobNo || await genJobNo(branchId, createdAt);
         state.repairs.push({
-          id: uid(), jobNo:newJobNo, customerName, phone, branchId, deviceBrand, deviceModel, imei, newImei, swapDate: newImei ? new Date().toISOString() : '', issue,
+          id: uid(), jobNo:newJobNo, customerName, agentName, phone, branchId, deviceBrand, deviceModel, imei, newImei, swapDate: newImei ? new Date().toISOString() : '', issue,
           estCost: estCost||0, technician, status: status||STATUSES[0], serviceType: serviceType||SERVICE_TYPES[0],
           warrantyStatus: warrantyStatus||WARRANTY_STATUSES[0], partsUsed: [], photoBefore:null, photoAfter:null,
           paid: !!paid, paidAt: paid ? new Date().toISOString() : null, createdAt, updatedAt: new Date().toISOString(),
@@ -2884,6 +2773,7 @@ async function printReceipt(id){
       <div class="receipt-row"><span>${T('receiptDate')}</span><span>${fmtDate(r.createdAt)}</span></div>
       ${r.branchId?`<div class="receipt-row"><span>${T('branchLabel')}</span><span>${branchName(r.branchId)}</span></div>`:''}
       <div class="receipt-row"><span>${T('receiptCustomer')}</span><span>${r.customerName}</span></div>
+      ${r.agentName?`<div class="receipt-row"><span>${T('xlAgent')}</span><span>${attrSafe(r.agentName)}</span></div>`:''}
       <div class="receipt-row"><span>${T('receiptPhone')}</span><span>${r.phone||'-'}</span></div>
       <div class="receipt-row"><span>${T('deviceBrand')}</span><span>${r.deviceBrand||'-'}</span></div><div class="receipt-row"><span>${T('xlModel')}</span><span>${r.deviceModel}</span></div>
       ${r.imei?`<div class="receipt-row"><span>${isSwapRepair(r)?T('oldImeiLabel'):'IMEI'}</span><span>${r.imei}</span></div>`:''}
@@ -2936,6 +2826,7 @@ async function printJobCard(id){
       ${r.deliveredAt?`<div class="receipt-row"><span>${T('xlDeliveredDate')}</span><span>${fmtDate(r.deliveredAt)}</span></div>`:''}
       ${r.branchId?`<div class="receipt-row"><span>${T('branchLabel')}</span><span>${branchName(r.branchId)}</span></div>`:''}
       <div class="receipt-row"><span>${T('receiptCustomer')}</span><span>${r.customerName}</span></div>
+      ${r.agentName?`<div class="receipt-row"><span>${T('xlAgent')}</span><span>${attrSafe(r.agentName)}</span></div>`:''}
       <div class="receipt-row"><span>${T('receiptPhone')}</span><span>${r.phone||'-'}</span></div>
       <div class="receipt-row"><span>${T('deviceBrand')}</span><span>${r.deviceBrand||'-'}</span></div><div class="receipt-row"><span>${T('xlModel')}</span><span>${r.deviceModel}</span></div>
       ${r.imei?`<div class="receipt-row"><span>${isSwapRepair(r)?T('oldImeiLabel'):'IMEI'}</span><span>${r.imei}</span></div>`:''}
@@ -4968,8 +4859,8 @@ function ticketCard(r, compact){
     <div class="ticket st-${stIdx+1}">
       <div class="ticket-top">
         <div>
-          <div class="ticket-device">${deviceLabel(r)} <span class="status-badge status-${stIdx+1}">${DL(r.status)}</span>${isSwapRepair(r)?`<span class="status-badge badge-swap">SWAP</span>`:''}${swapKindBadge(r)}${isRefundSwap(r)?`<span class="status-badge badge-quote-pending">${TT('تعويض مالي','Compensation')}${r.refundAmount?': '+money(r.refundAmount):''}</span>`:''}${r.warrantyStatus?`<span class="status-badge ${r.warrantyStatus==='ضمن الضمان'?'badge-warranty-in':'badge-warranty-out'}">${DL(r.warrantyStatus)}</span>`:''}${quoteBadge(r)}${(!isSwapRepair(r) && r.repairType)?`<span class="status-badge ${r.repairType==='part'?((r.partsUsed||[]).length?'badge-branch':'badge-quote-pending'):'badge-branch'}">${r.repairType==='part'?((r.partsUsed||[]).length?TT('تبديل قطعة','Part replacement'):TT('يحتاج قطعة — ما انصرفت بعد','Needs a part — not issued yet')):repairTypeLabel(r.repairType)}</span>`:''}${(!isSwapRepair(r) && boardActionOf(r))?`<span class="status-badge ${boardActionOf(r)==='replace'?(r.newImei?'badge-quote-ok':'badge-quote-pending'):'badge-branch'}">${boardActionOf(r)==='replace'?TT('تبديل بورد','Board replaced')+(r.newImei?'':' — '+TT('ينتظر IMEI جديد','needs new IMEI')):TT('تصليح بورد','Board repaired')}</span>`:''}${partReqBadge(r)}${lateBadge(r)}${r.repeatOf?`<span class="status-badge badge-repeat" title="${TT('رجع خلال 30 يوم من الجوب','Returned within 30 days of job')} ${r.repeatOf}">${TT('راجع','Repeat')} ↺</span>`:''}${r.partArrivedAt && r.status===ST.PARTS?`<span class="status-badge badge-quote-ok">${TT('وصلت القطعة','Part arrived')} ✓</span>`:''}${r.branchId?`<span class="status-badge badge-branch">${branchName(r.branchId)}</span>`:''}</div>
-          <div class="ticket-meta">${r.jobNo?`<span class="mono" style="font-weight:600;color:var(--violet-dark);">${T('jobCardNo')}: ${r.jobNo}</span> · `:''}${r.imei?('IMEI: '+r.imei+' · '):''}${r.newImei?(T('newImeiShort')+': '+r.newImei+' · '):''}<button class="link-btn" onclick="openCustomerHistory('${r.id}')" title="${TT('سجل الزبون','Customer history')}">${r.customerName}</button>${visits?` <span style="font-size:11px;color:var(--muted);">(${TT('زيارات سابقة','previous visits')}: ${visits})</span>`:''} · ${r.phone} · ${T('receivedOn')} ${fmtDate(r.createdAt)}${r.deliveredAt?' · '+T('deliveredOn')+' '+fmtDate(r.deliveredAt):''} · ${T('jobAgeLabel')}: ${jobAgeDays(r)} ${T('daysLabel')}${r.technician?' · '+T('technicianLabel')+' '+r.technician:''}${(!out && expiry)?` · ${TT('الضمان لغاية','Warranty until')} ${fmtISODate(expiry)}`:''}</div>
+          <div class="ticket-device">${deviceLabel(r)} <span class="status-badge status-${stIdx+1}">${DL(r.status)}</span>${isSwapRepair(r)?`<span class="status-badge badge-swap">SWAP</span>`:''}${notActiveBadge(r)}${swapKindBadge(r)}${isRefundSwap(r)?`<span class="status-badge badge-quote-pending">${TT('تعويض مالي','Compensation')}${r.refundAmount?': '+money(r.refundAmount):''}</span>`:''}${r.warrantyStatus?`<span class="status-badge ${r.warrantyStatus==='ضمن الضمان'?'badge-warranty-in':'badge-warranty-out'}">${DL(r.warrantyStatus)}</span>`:''}${quoteBadge(r)}${(!isSwapRepair(r) && r.repairType)?`<span class="status-badge ${r.repairType==='part'?((r.partsUsed||[]).length?'badge-branch':'badge-quote-pending'):'badge-branch'}">${r.repairType==='part'?((r.partsUsed||[]).length?TT('تبديل قطعة','Part replacement'):TT('يحتاج قطعة — ما انصرفت بعد','Needs a part — not issued yet')):repairTypeLabel(r.repairType)}</span>`:''}${(!isSwapRepair(r) && boardActionOf(r))?`<span class="status-badge ${boardActionOf(r)==='replace'?(r.newImei?'badge-quote-ok':'badge-quote-pending'):'badge-branch'}">${boardActionOf(r)==='replace'?TT('تبديل بورد','Board replaced')+(r.newImei?'':' — '+TT('ينتظر IMEI جديد','needs new IMEI')):TT('تصليح بورد','Board repaired')}</span>`:''}${partReqBadge(r)}${lateBadge(r)}${r.repeatOf?`<span class="status-badge badge-repeat" title="${TT('رجع خلال 30 يوم من الجوب','Returned within 30 days of job')} ${r.repeatOf}">${TT('راجع','Repeat')} ↺</span>`:''}${r.partArrivedAt && r.status===ST.PARTS?`<span class="status-badge badge-quote-ok">${TT('وصلت القطعة','Part arrived')} ✓</span>`:''}${r.branchId?`<span class="status-badge badge-branch">${branchName(r.branchId)}</span>`:''}</div>
+          <div class="ticket-meta">${r.jobNo?`<span class="mono" style="font-weight:600;color:var(--violet-dark);">${T('jobCardNo')}: ${r.jobNo}</span> · `:''}${r.imei?('IMEI: '+r.imei+' · '):''}${r.newImei?(T('newImeiShort')+': '+r.newImei+' · '):''}<button class="link-btn" onclick="openCustomerHistory('${r.id}')" title="${TT('سجل الزبون','Customer history')}">${r.customerName}</button>${r.agentName?` · ${agentLine(r)}`:''}${visits?` <span style="font-size:11px;color:var(--muted);">(${TT('زيارات سابقة','previous visits')}: ${visits})</span>`:''} · ${r.phone} · ${T('receivedOn')} ${fmtDate(r.createdAt)}${r.deliveredAt?' · '+T('deliveredOn')+' '+fmtDate(r.deliveredAt):''} · ${T('jobAgeLabel')}: ${jobAgeDays(r)} ${T('daysLabel')}${r.technician?' · '+T('technicianLabel')+' '+r.technician:''}${(!out && expiry)?` · ${TT('الضمان لغاية','Warranty until')} ${fmtISODate(expiry)}`:''}</div>
           ${(r.photoBefore||r.photoAfter)?`<div class="ticket-photos">
             ${r.photoBefore?`<a href="${r.photoBefore}" target="_blank" rel="noopener" class="ticket-photo-link"><img src="${r.photoBefore}" class="ticket-photo-thumb"><span>${T('photoBefore')}</span></a>`:''}
             ${r.photoAfter?`<a href="${r.photoAfter}" target="_blank" rel="noopener" class="ticket-photo-link"><img src="${r.photoAfter}" class="ticket-photo-thumb"><span>${T('photoAfter')}</span></a>`:''}
@@ -5046,8 +4937,9 @@ function openRepairModal(id){
     <div class="modal-cols">
     <div class="form-2col">
       <div class="form-row"><label>${T('customerName')}</label><input id="f_customerName" value="${editing?editing.customerName:''}"></div>
-      <div class="form-row"><label>${T('phone')}</label><input id="f_phone" value="${editing?editing.phone:''}" oninput="updateCustInfo()" inputmode="tel"></div>
+      <div class="form-row"><label>${T('agentName')} <span style="font-weight:400;color:var(--muted);font-size:11.5px;">${TT('(إذا الجهاز جاي من وكيل)','(if the device came from a dealer)')}</span></label><input id="f_agentName" list="agentNamesList" value="${editing?attrSafe(editing.agentName||''):''}" placeholder="${TT('اختياري','Optional')}"><datalist id="agentNamesList">${agentNamesList().map(a=>`<option value="${attrSafe(a)}">`).join('')}</datalist></div>
     </div>
+    <div class="form-row"><label>${T('phone')}</label><input id="f_phone" value="${editing?editing.phone:''}" oninput="updateCustInfo()" inputmode="tel"></div>
     <div id="custInfo"></div>
     <div class="form-row"><label>${T('branchLabel')}</label>
       ${authRole==='admin' ? `<select id="f_branch" onchange="refreshModalBranchLists()">${state.branches.map(b=>`<option value="${b.id}" ${b.id===modalBranchId?'selected':''}>${b.name}</option>`).join('')}</select>`
@@ -5070,7 +4962,8 @@ function openRepairModal(id){
       ${(()=>{ const sel = editing ? (Array.isArray(editing.faults) ? editing.faults : faultsFromLegacy(editing.issue)) : []; return faultChipsHtml(sel); })()}
       <input id="f_issueNote" style="margin-top:8px;" placeholder="${TT('ملاحظة إضافية (اختياري) — مثل: سقط بالماي، يشتغل أحياناً','Extra note (optional) — e.g. dropped in water, works sometimes')}" value="${editing ? (Array.isArray(editing.faults) ? (editing.issueNote||'') : (faultsFromLegacy(editing.issue).length ? '' : (editing.issue||''))) : ''}"></div>
     <div class="form-2col">
-      <div class="form-row"><label>${TT('تاريخ التفعيل','Activation date')}</label><input id="f_activationDate" type="date" value="${editing&&editing.activationDate?editing.activationDate:''}" max="${todayISO()}" onchange="updateWarrantyInfo(true);updateSwapRule()"></div>
+      <div class="form-row"><label>${TT('تاريخ التفعيل','Activation date')}</label><input id="f_activationDate" type="date" value="${editing&&editing.activationDate&&!editing.notActive?editing.activationDate:''}" max="${todayISO()}" ${editing&&editing.notActive?'disabled':''} onchange="updateWarrantyInfo(true);updateSwapRule()">
+        <label class="na-check"><input type="checkbox" id="f_notActive" ${editing&&editing.notActive?'checked':''} onchange="toggleNotActive()"> Not Active <span style="font-weight:400;color:var(--muted);">— ${TT('الجهاز غير مفعّل','device not activated')}</span></label></div>
       <div class="form-row"><label>${TT('مدة الضمان (أشهر)','Warranty (months)')}</label><input id="f_warrantyMonths" type="number" min="0" value="${editing&&editing.warrantyMonths!==undefined?editing.warrantyMonths:12}" oninput="updateWarrantyInfo(true)"></div>
     </div>
     <div class="form-row"><label>${T('warrantyStatus')} <span style="color:var(--red);">*</span></label>
@@ -5220,10 +5113,26 @@ function updateImeiInfo(){
     ${TT('هذا الـ IMEI إله جوبات سابقة:','This IMEI has previous jobs:')}
     <ul style="margin:4px 0 0;padding-inline-start:18px;">${list.slice(0,5).map(j=>`<li>${j.jobNo||'-'} · ${fmtDate(j.createdAt)} · ${DL(j.status)} · ${j.issue||''}</li>`).join('')}</ul></div>`;
 }
+function attrSafe(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+function agentNamesList(){ const m = new Map(); for(const r of state.repairs){ const a = (r.agentName||'').trim(); if(a && !m.has(a.toLowerCase())) m.set(a.toLowerCase(), a); } return [...m.values()].sort((x,y)=>x.localeCompare(y)); }
+function notActiveBadge(r){ return r && r.notActive ? `<span class="status-badge badge-na">Not Active</span>` : ''; }
+function agentLine(r){ return r && r.agentName ? `${TT('الوكيل','Agent')}: <b>${attrSafe(r.agentName)}</b>` : ''; }
+function modalNotActive(){ const c = document.getElementById('f_notActive'); return !!(c && c.checked); }
+function toggleNotActive(){
+  const on = modalNotActive();
+  const d = document.getElementById('f_activationDate');
+  if(d){ if(on) d.value = ''; d.disabled = on; }
+  updateWarrantyInfo(true); updateSwapRule();
+}
 function updateWarrantyInfo(userChanged){
   const el = document.getElementById('warrantyInfo'); if(!el) return;
   const pd = (document.getElementById('f_activationDate')||{}).value||'';
   const months = Number((document.getElementById('f_warrantyMonths')||{}).value)||0;
+  if(modalNotActive()){
+    el.innerHTML = `<div class="info-box good"><b>Not Active</b> — ${TT('الجهاز غير مفعّل، يعتبر جديد وضمن الضمان. الضمان يبدأ من تاريخ التفعيل.','The device is not activated: treated as new and under warranty. The warranty starts from activation.')}</div>`;
+    if(userChanged) setWarrantyChoice(WARRANTY_STATUSES[0]);
+    return;
+  }
   if(!pd){ el.innerHTML = ''; return; }
   const exp = addMonthsISO(pd, months);
   const valid = exp && exp >= todayISO();
@@ -5384,7 +5293,9 @@ async function saveRepair(id){
   const swapDateVal = swap ? g('f_swapDate') : '';
   const swapNote = swap ? g('f_swapNote').trim() : '';
   const swapInvId = swap ? g('f_swapInv') : '';
-  const activationDate = g('f_activationDate');
+  const notActive = !!(document.getElementById('f_notActive')||{}).checked;
+  const activationDate = notActive ? '' : g('f_activationDate');
+  const agentName = (g('f_agentName')||'').trim();
   const warrantyMonths = Number(g('f_warrantyMonths'))||0;
   const out = warrantyStatus===WARRANTY_STATUSES[1];
   const laborCost = out ? confirmSmallIQD(parseIQD(g('f_labor')), TT('أجور اليد','Labour')) : 0;
@@ -5415,10 +5326,10 @@ async function saveRepair(id){
     if(authRole!=='admin'){ alert(msg); return; }
     if(!confirm(msg + TT('\n\nتسجله ضمن الضمان كمدير؟','\n\nKeep it under warranty as admin?'))) return;
   }
-  if(!out && !activationDate && !prevRec && !confirm(TT('ما محدد تاريخ تفعيل الجهاز وهو داخل الضمان. تكمل بدون تاريخ؟','No activation date entered for an in-warranty device. Continue without it?'))) return;
+  if(!out && !activationDate && !notActive && !prevRec && !confirm(TT('ما محدد تاريخ تفعيل الجهاز وهو داخل الضمان. تكمل بدون تاريخ؟','No activation date entered for an in-warranty device. Continue without it?'))) return;
   const swapDate = swapDateVal ? new Date(swapDateVal+'T12:00:00').toISOString() : ((prevRec&&prevRec.swapDate&&newImei) ? prevRec.swapDate : (newImei ? new Date().toISOString() : ''));
   let swapRule = {fields:{}};
-  if(swap){ swapRule = swapFieldsFromForm(prevRec, activationDate, newImei || (refundAmount ? 'refund' : '')); if(swapRule.error){ alert(swapRule.error); return; } }
+  if(swap){ swapRule = swapFieldsFromForm(prevRec, activationDate, newImei || (refundAmount ? 'refund' : ''), notActive); if(swapRule.error){ alert(swapRule.error); return; } }
   // intake date/time: automatic; only the admin may correct it (e.g. a job entered late)
   const recvIn = authRole==='admin' ? g('f_receivedAt') : '';
   const receivedISO = recvIn && !isNaN(new Date(recvIn)) ? new Date(recvIn).toISOString() : '';
@@ -5426,7 +5337,7 @@ async function saveRepair(id){
   const repairType = g('f_repairType');
   const techNote = g('f_techNote').trim();
   { const dup = duplicatePartError(modalPartsUsed); if(dup){ alert(dup); return; } }
-  const fields = {techNote, boardAction, customerName, phone, branchId, deviceBrand, deviceModel, imei, issue, faults, issueNote, repairType, estCost, laborCost, quoteStatus, technician, serviceType, warrantyStatus, activationDate, warrantyMonths, warrantyExpiry, newImei, newDeviceModel, swapDate, swapNote, swapInvId, partsUsed: JSON.parse(JSON.stringify(modalPartsUsed)), softwareOps: [...modalSoftware], photoBefore:modalPhotoBefore, photoAfter:modalPhotoAfter};
+  const fields = {techNote, boardAction, customerName, agentName, notActive, phone, branchId, deviceBrand, deviceModel, imei, issue, faults, issueNote, repairType, estCost, laborCost, quoteStatus, technician, serviceType, warrantyStatus, activationDate, warrantyMonths, warrantyExpiry, newImei, newDeviceModel, swapDate, swapNote, swapInvId, partsUsed: JSON.parse(JSON.stringify(modalPartsUsed)), softwareOps: [...modalSoftware], photoBefore:modalPhotoBefore, photoAfter:modalPhotoAfter};
   Object.assign(fields, swapRule.fields);
   if(!swap){ if(repairType!=='part') fields.partsUsed = []; if(repairType!=='software') fields.softwareOps = []; }
   if(swap){
@@ -6085,7 +5996,7 @@ function updateSwapRule(){
   const act = (document.getElementById('f_activationDate')||{}).value||'';
   const editing = modalCtx.id ? state.repairs.find(r=>r.id===modalCtx.id) : null;
   const ref = editing ? editing.createdAt : null;
-  const days = daysFromActivation(act, ref);
+  const days = modalNotActive() ? 0 : daysFromActivation(act, ref);
   const vocBox = document.getElementById('vocBox');
   if(days===null){
     el.innerHTML = `<div class="info-box warn">${TT('حدد «تاريخ التفعيل» حتى النظام يعرف إذا الاستبدال عيب مصنعي (خلال أسبوع) أو VOC.','Enter the activation date so the system can tell a manufacturing-defect swap (within a week) from a VOC.')}</div>`;
@@ -6095,7 +6006,7 @@ function updateSwapRule(){
   if(days<0){ el.innerHTML = `<div class="info-box bad">${TT('تاريخ التفعيل بعد تاريخ الاستلام، تأكد منه.','The activation date is after the intake date, check it.')}</div>`; if(vocBox) vocBox.style.display='none'; return; }
   if(swapKindForDays(days)==='defect'){
     const s = editing && editing.swapKind==='defect' ? (editing.vocStatus||'pending') : 'pending';
-    el.innerHTML = `<div class="info-box good">${TT(`مضى ${days} يوم على التفعيل — استبدال عيب مصنعي (ضمن أول ${SWAP_DEFECT_DAYS} أيام). يحتاج موافقة المدير قبل تسليم الجهاز البديل.`, `${days} day(s) since activation — manufacturing-defect swap (within the first ${SWAP_DEFECT_DAYS} days). Needs admin approval before the replacement is handed over.`)}
+    el.innerHTML = `<div class="info-box good">${modalNotActive() ? `<b>Not Active</b> — ${TT('الجهاز غير مفعّل، يعتبر استبدال عيب مصنعي. يحتاج موافقة المدير قبل تسليم الجهاز البديل.','Device not activated: counted as a manufacturing-defect swap. Needs admin approval before handing over the replacement.')}` : TT(`مضى ${days} يوم على التفعيل — استبدال عيب مصنعي (ضمن أول ${SWAP_DEFECT_DAYS} أيام). يحتاج موافقة المدير قبل تسليم الجهاز البديل.`, `${days} day(s) since activation — manufacturing-defect swap (within the first ${SWAP_DEFECT_DAYS} days). Needs admin approval before the replacement is handed over.`)}
       ${authRole!=='admin'?`<br>${TT('حالة الموافقة','Approval')}: <b>${s==='approved'?TT('موافق ✓','Approved ✓'):s==='rejected'?TT('مرفوض','Rejected'):TT('بانتظار المدير','Waiting for admin')}</b>`:''}</div>`;
     if(vocBox) vocBox.style.display = authRole==='admin' ? 'block' : 'none';
   }else{
@@ -6121,14 +6032,14 @@ function vocFormHtml(editing){
     </div>`;
 }
 // Validates and returns the swap fields to save, or {error}
-function swapFieldsFromForm(prevRec, activationDate, newImei){
+function swapFieldsFromForm(prevRec, activationDate, newImei, notActive){
   const createdAt = prevRec ? prevRec.createdAt : new Date().toISOString();
   const legacyDone = prevRec && isSwapRepair(prevRec) && prevRec.newImei && !prevRec.swapKind;
-  if(!activationDate){
+  if(!activationDate && !notActive){
     if(legacyDone) return {fields:{}};
     return {error: TT('حدد «تاريخ التفعيل» للجهاز. الاستبدال يعتمد عليه (عيب مصنعي خلال أسبوع، وبعدها VOC بموافقة المدير).','Enter the device activation date. Swaps depend on it (defect within a week, otherwise VOC with admin approval).')};
   }
-  const days = daysFromActivation(activationDate, createdAt);
+  const days = notActive ? 0 : daysFromActivation(activationDate, createdAt);
   if(days<0) return {error: TT('تاريخ التفعيل بعد تاريخ استلام الجهاز، تأكد منه.','The activation date is after the intake date, please check it.')};
   const kind = swapKindForDays(days);
   const f = {swapKind:kind, swapDays:days};
@@ -6215,7 +6126,7 @@ const DEFAULT_FAULTS = [
   {n:'لا يشتغل نهائياً', p:''}, {n:'لا يشحن', p:'منفذ / بورد الشحن'}, {n:'الشحن بطيء أو متقطع', p:'منفذ / بورد الشحن'},
   {n:'البطارية تفرغ بسرعة', p:'بطارية'}, {n:'البطارية منفوخة', p:'بطارية'},
   {n:'الشاشة مكسورة', p:'شاشة'}, {n:'الشاشة لا تعرض / سوداء', p:'شاشة'}, {n:'خطوط أو بقع بالشاشة', p:'شاشة'}, {n:'اللمس لا يعمل', p:'شاشة'},
-  {n:'الجهاز يسخن', p:''}, {n:'يطفي ويشتغل لوحده', p:''}, {n:'معلق على الشعار', p:''}, {n:'مشكلة سوفتوير / تحديث', p:''}, {n:'قفل حساب Google (FRP)', p:''},
+  {n:'الجهاز يسخن', p:''}, {n:'يطفي ويشتغل لوحده', p:''}, {n:'معلق على الشعار', p:''}, {n:'مشكلة سوفتوير / تحديث', p:''}, {n:'مشكلة تطبيقات', p:''}, {n:'قفل حساب Google (FRP)', p:''},
   {n:'الكاميرا الخلفية', p:'كاميرا خلفية'}, {n:'الكاميرا الأمامية', p:'كاميرا أمامية'}, {n:'زجاج الكاميرا مكسور', p:'زجاج كاميرا'},
   {n:'السماعة الداخلية (المكالمات)', p:'سماعة داخلية'}, {n:'السماعة الخارجية (الصوت)', p:'سماعة خارجية'}, {n:'المايك (الطرف الثاني ما يسمع)', p:'مايك'},
   {n:'لا توجد شبكة / إشارة ضعيفة', p:''}, {n:'الواي فاي أو البلوتوث', p:''}, {n:'لا يقرأ الشريحة', p:'درج الشريحة'},
@@ -6243,7 +6154,22 @@ function enName(ar){ return EN_NAMES[String(ar||'').trim()] || ''; }
 // "عربي · English" whatever the interface language; names the admin added without a translation stay as they are
 function biName(ar){ const en = enName(ar); return en ? `${ar} · ${en}` : String(ar||''); }
 let serviceLists = null;
-function faultList(){ return (serviceLists && Array.isArray(serviceLists.faults) && serviceLists.faults.length) ? serviceLists.faults : DEFAULT_FAULTS; }
+function faultList(){
+  if(serviceLists && Array.isArray(serviceLists.faults) && serviceLists.faults.length){
+    // one-time: add «مشكلة تطبيقات» to lists saved before it existed (an admin can still remove it afterwards)
+    if(!serviceLists.appsFaultAdded){
+      serviceLists.appsFaultAdded = true;
+      if(!serviceLists.faults.some(f=>f.n==='مشكلة تطبيقات')){
+        const i = serviceLists.faults.findIndex(f=>f.n==='مشكلة سوفتوير / تحديث');
+        const oi = serviceLists.faults.findIndex(f=>f.n===OTHER_FAULT);
+        serviceLists.faults.splice(i>=0 ? i+1 : (oi>=0 ? oi : serviceLists.faults.length), 0, {n:'مشكلة تطبيقات', p:''});
+      }
+      try{ if(authRole==='admin') queueSave('serviceLists'); }catch(e){}
+    }
+    return serviceLists.faults;
+  }
+  return DEFAULT_FAULTS;
+}
 function partTypeList(){ return (serviceLists && Array.isArray(serviceLists.partTypes) && serviceLists.partTypes.length) ? serviceLists.partTypes : DEFAULT_PART_TYPES; }
 function inferPartType(name){
   const n = String(name||'');
@@ -6298,7 +6224,7 @@ const FAULT_CAT_BY_NAME = {
   'لا توجد شبكة / إشارة ضعيفة':'network','الواي فاي أو البلوتوث':'network','لا يقرأ الشريحة':'network',
   'البصمة لا تعمل':'buttons','أزرار الصوت':'buttons','الهزاز':'buttons',
   'الغطاء الخلفي مكسور':'body','الهيكل / الإطار متضرر':'body',
-  'معلق على الشعار':'software','مشكلة سوفتوير / تحديث':'software','قفل حساب Google (FRP)':'software',
+  'معلق على الشعار':'software','مشكلة سوفتوير / تحديث':'software','مشكلة تطبيقات':'software','قفل حساب Google (FRP)':'software',
   'الجهاز يسخن':'other','تعرض للماء':'other',
 };
 const FAULT_CAT_BY_PART = {'شاشة':'screen','فليكس شاشة':'screen','بطارية':'power','منفذ / بورد الشحن':'power','زر باور / فليكس':'power','سماعة داخلية':'sound','سماعة خارجية':'sound','مايك':'sound','كاميرا خلفية':'camera','كاميرا أمامية':'camera','زجاج كاميرا':'camera','درج الشريحة':'network','بصمة':'buttons','أزرار الصوت':'buttons','هزاز':'buttons','غطاء خلفي':'body','فريم / هيكل':'body'};
