@@ -7238,23 +7238,26 @@ function matchLocHeader(h){
 }
 function locHeaders(){ return [[MAIN_WH_ID, STR.ar.mainWarehouse], ...state.branches.map(b=>[b.id, b.name])]; }
 // sets the stock of each catalog item at each location to the given number (movement = 'count')
-function applyStockSets(sets){
+function applyStockSets(sets, mode){
   recomputeQty();
-  const last = new Map(); for(const s of sets) last.set(s.loc+'|'+normCode(s.item.code), s);
+  const add = mode==='add';
+  const last = new Map();
+  for(const s of sets){ const k = s.loc+'|'+normCode(s.item.code); const p = last.get(k);
+    last.set(k, (add && p) ? {...s, qty:p.qty+s.qty} : s); }
   const ref = 'IMPORT-' + new Date().toISOString().slice(0,10);
   let changed = 0, created = 0, same = 0;
   for(const s of last.values()){
     const it = s.item; const k = normCode(it.code);
     const rows = state.inventory.filter(p=>p.branchId===s.loc && !p.defective && normCode(p.code)===k);
     const cur = rows.reduce((a,p)=>a+(Number(p.qty)||0),0);
-    const diff = s.qty - cur;
+    const diff = add ? s.qty : s.qty - cur;
     if(!rows.length){
       if(!s.qty){ same++; continue; }
-      newStockItem({branchId:s.loc, code:it.code, name:[it.partType||it.nameEn||it.nameAr, it.brand, it.model].filter(Boolean).join(' '), brand:it.brand||'', partType:it.partType||'', model:it.model||'', threshold:2, costPrice:0, sellPrice:Number(it.price)||0}, s.qty, 'count');
+      newStockItem({branchId:s.loc, code:it.code, name:[it.partType||it.nameEn||it.nameAr, it.brand, it.model].filter(Boolean).join(' '), brand:it.brand||'', partType:it.partType||'', model:it.model||'', threshold:2, costPrice:0, sellPrice:Number(it.price)||0}, s.qty, add?'import':'count');
       created++; continue;
     }
     if(!diff){ same++; continue; }
-    addMove(rows[0].id, diff, 'count', ref); changed++;
+    addMove(rows[0].id, diff, add?'import':'count', ref); changed++;
   }
   if(changed||created){
     saveStockMoves(); saveInventory();
@@ -7262,7 +7265,17 @@ function applyStockSets(sets){
   }
   return {changed, created, same};
 }
-const CAT_TEMPLATE_HEAD =['Brand','Code','Model','Part (EN)','Part (AR)','Part Type','Price (IQD)'];
+let pendingStockSets = null;
+function finishStockImport(mode){
+  const sets = pendingStockSets; pendingStockSets = null; closeModal(true);
+  if(!sets) return;
+  const r = applyStockSets(sets, mode);
+  render();
+  alert(mode==='add'
+    ? TT(`تمت الإضافة على المخزن.\n${r.changed} صنف انضافت كميته على الموجود، ${r.created} صنف جديد بالمخازن.`, `Added to stock.\n${r.changed} existing rows increased, ${r.created} new stock rows.`)
+    : TT(`تم تصحيح الكميات.\n${r.changed} تصحيح، ${r.created} صنف جديد بالمخازن، ${r.same} مطابقة.`, `Stock set.\n${r.changed} corrected, ${r.created} new stock rows, ${r.same} unchanged.`));
+}
+const CAT_TEMPLATE_HEAD = ['Brand','Code','Model','Part (EN)','Part (AR)','Part Type','Price (IQD)'];
 function downloadCatalogTemplate(){
   if(typeof XLSX==='undefined'){ alert(T('importError')); return; }
   const lh = locHeaders();
@@ -7309,7 +7322,7 @@ function importCatalogExcel(evt){
     type:['part type','نوع القطعة','النوع'],
     price:['price (iqd)','spare part price (iqd)','part price (iqd)','new price iqd','price iqd','price','السعر','سعر القطعة'],
   };
-  let added = 0, updated = 0, skipped = 0, sheetsUsed = [];
+  let added = 0, updated = 0, skipped = 0, sheetsUsed = [], newModels = 0;
   const stockSets = []; // {item, loc, qty} from the location columns
   const locCols = row=>{ const out = []; row.forEach((h,j)=>{ const l = matchLocHeader(h); if(l) out.push([j,l]); }); return out; };
   const knownBrands = [...new Set([...catalogBrands(), ...catBrands(), ...KNOWN_BRANDS])];
@@ -7357,6 +7370,10 @@ function importCatalogExcel(evt){
               state.partsCatalog.push(ex);
               added++;
             }
+            for(const m of String(ex.model||'').split('/').map(x=>x.trim()).filter(Boolean)){
+              if(catalogModels(ex.brand).some(x=>normModel(x, ex.brand)===normModel(m, ex.brand))) continue; // "C68+" = "C68 Plus"
+              if(ensureCatalogModel(ex.brand, m)) newModels++;
+            }
             for(const [j, loc] of lc){
               const q = String(row[j]===undefined?'':row[j]).trim();
               if(q==='') continue;
@@ -7376,19 +7393,27 @@ function importCatalogExcel(evt){
   (async()=>{
     for(const f of files) await readOne(f);
     if(added||updated){ saveCatalog(); logAudit('catalog_import', authRole, currentActorName(), `${TT('استيراد أصناف','Items import')}: +${added} / ~${updated}`); }
-    let stockMsg = '';
-    if(stockSets.length){
-      const locs = [...new Set(stockSets.map(s=>s.loc))];
-      if(confirm(TT(`الملف بيه كميات لـ ${locs.length} مكان (${locs.map(locName).join('، ')}).\nراح تصير كمية كل قطعة بكل مكان مثل الرقم اللي بالملف، والفرق ينسجل كحركة «جرد / تصحيح». الخانات الفارغة ما تتغير.\nتكمل؟`,
-        `The file has quantities for ${locs.length} location(s) (${locs.map(locName).join(', ')}).\nEach part's stock will be set to the number in the file; differences are logged as "Count correction". Empty cells stay unchanged.\nContinue?`))){
-        const r = applyStockSets(stockSets);
-        stockMsg = TT(`\nالكميات: ${r.changed} تصحيح، ${r.created} صنف جديد بالمخازن، ${r.same} مطابقة.`, `\nStock: ${r.changed} corrected, ${r.created} new stock rows, ${r.same} unchanged.`);
-      }
-    }
+    if(newModels){ saveDeviceCatalog(); }
     render();
-    alert(sheetsUsed.length
-      ? TT(`تم الاستيراد.\nأصناف جديدة: ${added}\nتحديث: ${updated}\nسطور ناقصة تخطيناها: ${skipped}\nالشيتات: ${sheetsUsed.join('، ')}`, `Imported.\nNew items: ${added}\nUpdated: ${updated}\nIncomplete rows skipped: ${skipped}\nSheets: ${sheetsUsed.join(', ')}`) + stockMsg
-      : TT('ما لگينا شيت بيه أعمدة الموديل واسم القطعة. استخدم «قالب الأصناف».','No sheet with Model and Part columns was found. Use the "Items template".'));
+    if(!sheetsUsed.length){ alert(TT('ما لگينا شيت بيه أعمدة الموديل واسم القطعة. استخدم «قالب الأصناف».','No sheet with Model and Part columns was found. Use the "Items template".')); return; }
+    const head = TT(`أصناف جديدة: ${added} · تحديث: ${updated} · موديلات أجهزة جديدة: ${newModels} · سطور ناقصة: ${skipped}`, `New items: ${added} · Updated: ${updated} · New device models: ${newModels} · Incomplete rows: ${skipped}`);
+    if(!stockSets.length){ alert(TT('تم الاستيراد.\n','Imported.\n')+head); return; }
+    pendingStockSets = stockSets;
+    const locs = [...new Set(stockSets.map(s=>s.loc))];
+    const per = locs.map(l=>`<tr><td>${locName(l)}</td><td class="mono">${stockSets.filter(s=>s.loc===l).reduce((a,s)=>a+s.qty,0)}</td></tr>`).join('');
+    showModal(`
+      <h3>${TT('الكميات اللي بالملف','Quantities in the file')}</h3>
+      <p style="font-size:13px;color:var(--muted);">${head}</p>
+      <table><thead><tr><th>${T('colBranch')}</th><th>${TT('مجموع القطع','Total pcs')}</th></tr></thead><tbody>${per}</tbody></table>
+      <p style="font-size:13px;line-height:1.9;margin-top:12px;">
+        <b>${TT('إضافة على الموجود','Add to existing')}</b>: ${TT('الأعداد تنضاف فوق الكمية الحالية بكل مكان (مثل استلام بضاعة).','the numbers are added on top of the current stock (like receiving goods).')}<br>
+        <b>${TT('استبدال (جرد)','Replace (count)')}</b>: ${TT('الكمية تصير مثل الملف بالضبط.','stock becomes exactly the number in the file.')}<br>
+        ${TT('الخانات الفارغة ما تتغير بالحالتين.','Empty cells stay unchanged either way.')}</p>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="finishStockImport('add')">${TT('إضافة على الموجود','Add to existing')}</button>
+        <button class="btn" onclick="finishStockImport('set')">${TT('استبدال (جرد)','Replace (count)')}</button>
+        <button class="btn" onclick="pendingStockSets=null;closeModal();">${T('cancel')}</button>
+      </div>`);
   })();
 }
 
