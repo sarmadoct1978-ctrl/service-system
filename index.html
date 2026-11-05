@@ -759,7 +759,7 @@ let lang = 'ar';
 const STR = {
   ar:{
     navDashboard:'لوحة التحكم', navDevices:'الأجهزة', navInventory:'المخزون', navInvoices:'الفواتير', navReports:'التقارير', navBranches:'الفروع', navAudit:'سجل التدقيق', navCallCenter:'الكول سنتر', navTransfers:'تحويل المخزون',
-    brand:'صيانة الميدان', brandSub:'نظام إدارة الصيانة', version:'نسخة 2.0 · 1.9.0', loading:'جارِ التحميل...',
+    brand:'صيانة الميدان', brandSub:'نظام إدارة الصيانة', version:'نسخة 2.1 · الأصناف والجرد', loading:'جارِ التحميل...',
     dashTitle:'لوحة التحكم', dashSub:'نظرة عامة على حالة الورشة اليوم',
     devicesTitle:'استقبال الأجهزة', devicesSub:'تتبع حالة كل جهاز من الاستلام حتى التسليم',
     inventoryTitle:'المخزون', inventorySub:'إدارة قطع الغيار والكميات',
@@ -907,7 +907,7 @@ const STR = {
   },
   en:{
     navDashboard:'Dashboard', navDevices:'Devices', navInventory:'Inventory', navInvoices:'Invoices', navReports:'Reports', navBranches:'Branches', navAudit:'Audit Log', navCallCenter:'Call Center', navTransfers:'Stock Transfers',
-    brand:'Al-Maidan Maintenance', brandSub:'Repair management system', version:'Version 2.0 · 1.9.0', loading:'Loading...',
+    brand:'Al-Maidan Maintenance', brandSub:'Repair management system', version:'Version 2.1 · Items & stock count', loading:'Loading...',
     dashTitle:'Dashboard', dashSub:"Today's overview of the workshop",
     devicesTitle:'Device intake', devicesSub:'Track each device from intake to delivery',
     inventoryTitle:'Inventory', inventorySub:'Manage spare parts and quantities',
@@ -1059,6 +1059,8 @@ function T(key){ return STR[lang][key] || key; }
 let state = {
   repairs: [],
   inventory: [],
+  partsCatalog: [],
+  stockCounts: [],
   invoices: [],
   branches: [],
   jobSeq: {},
@@ -1343,7 +1345,7 @@ function renderInner(){
   root.className = '';
 
   const authed = authRole==='admin' || authRole==='branch' || authRole==='warehouse';
-  if(authRole==='warehouse' && !['inventory','transfers'].includes(state.page)) state.page = 'inventory';
+  if(authRole==='warehouse' && !['inventory','transfers','items','stockcount'].includes(state.page)) state.page = 'inventory';
   const sidebarEl = document.getElementById('sidebarEl');
   if(sidebarEl) sidebarEl.style.display = authed ? 'flex' : 'none';
 
@@ -1367,6 +1369,8 @@ function renderInner(){
   if(authRole==='warehouse'){
     navList.innerHTML = [
       navBtn('inventory',T('navInventory'),'inventory'),
+      navBtn('items',TT('الأصناف','Items'),'items'),
+      navBtn('stockcount',TT('الجرد','Stock count'),'count',(state.stockCounts||[]).filter(c=>c.status==='submitted').length),
       navBtn('transfers',T('navTransfers'),'transfer',pendingIncomingTransfers),
     ].join('');
   }else if(authRole==='admin'){
@@ -1375,6 +1379,8 @@ function renderInner(){
       navBtn('devices',T('navDevices'),'devices'),
       navBtn('swaps',T('navSwaps'),'swap',pendingSwaps + pendingVocCount()),
       navBtn('inventory',T('navInventory'),'inventory'),
+      navBtn('items',TT('الأصناف','Items'),'items'),
+      navBtn('stockcount',TT('الجرد','Stock count'),'count',authRole==='admin'?(state.stockCounts||[]).filter(c=>c.status==='submitted').length:0),
       navBtn('transfers',T('navTransfers'),'transfer',pendingIncomingTransfers),
       navBtn('invoices',T('navInvoices'),'invoices'),
       navBtn('callcenter',T('navCallCenter'),'phone',readyCount),
@@ -1389,6 +1395,8 @@ function renderInner(){
       navBtn('devices',T('navDevices'),'devices'),
       navBtn('swaps',T('navSwaps'),'swap',pendingSwaps),
       navBtn('inventory',T('navInventory'),'inventory'),
+      navBtn('items',TT('الأصناف','Items'),'items'),
+      navBtn('stockcount',TT('الجرد','Stock count'),'count',authRole==='admin'?(state.stockCounts||[]).filter(c=>c.status==='submitted').length:0),
       navBtn('transfers',T('navTransfers'),'transfer',pendingIncomingTransfers),
       navBtn('invoices',T('navInvoices'),'invoices'),
       navBtn('callcenter',T('navCallCenter'),'phone',readyCount),
@@ -1418,10 +1426,12 @@ function renderInner(){
     audit:[T('auditTitle'),T('auditSub')],
     callcenter:[T('callCenterTitle'),T('callCenterSub')],
     transfers:[T('transfersTitle'),T('transfersSub')],
+    items:[TT('الأصناف (قطع الغيار)','Items (spare parts)'),TT('القائمة الرئيسية لقطع الغيار: الكود والموديل والسعر والرصيد بكل مكان','Master list of spare parts: code, model, price and stock per location')],
+    stockcount:[TT('الجرد','Stock count'),TT('جرد قطع الغيار للمخزن الرئيسي وكل فرع','Spare parts count for the main warehouse and each branch')],
     claims:[TT('مطالبات الضمان','Warranty claims'),TT('كلفة الصيانة داخل الضمان اللي تنطالب بيها الشركة أو الموزع','In-warranty repair costs to claim from the brand or distributor')],
   };
   if(!titles[state.page] || (state.page==='claims' && authRole!=='admin')) state.page = authRole==='warehouse' ? 'inventory' : 'dashboard';
-  if(authRole==='admin' && state.currentBranch===MAIN_WH_ID && !['inventory','transfers'].includes(state.page)) state.currentBranch = 'all';
+  if(authRole==='admin' && state.currentBranch===MAIN_WH_ID && !['inventory','transfers','items','stockcount'].includes(state.page)) state.currentBranch = 'all';
   const [pageTitle,pageSub] = titles[state.page];
   const dateStr = new Date().toLocaleDateString(lang==='ar'?'ar-IQ':'en-GB',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
 
@@ -1432,11 +1442,11 @@ function renderInner(){
         ${(authRole==='admin' || authRole==='warehouse') && state.page!=='branches' ? `
         <select class="branch-select" id="branchSelect" title="${T('branchLabel')}">
           <option value="all" ${state.currentBranch==='all'?'selected':''}>${T('allBranches')}</option>
-          ${(authRole==='warehouse' || state.page==='inventory' || state.page==='transfers') ? `<option value="${MAIN_WH_ID}" ${state.currentBranch===MAIN_WH_ID?'selected':''}>${T('mainWarehouse')}</option>` : ''}
+          ${(authRole==='warehouse' || ['inventory','transfers','items','stockcount'].includes(state.page)) ? `<option value="${MAIN_WH_ID}" ${state.currentBranch===MAIN_WH_ID?'selected':''}>${T('mainWarehouse')}</option>` : ''}
           ${state.branches.map(b=>`<option value="${b.id}" ${state.currentBranch===b.id?'selected':''}>${b.name}</option>`).join('')}
         </select>
         ` : `<span class="branch-chip">${icon('branch')} ${authRole==='admin'?T('adminModeLabel'):branchName(state.authBranchId)}</span>`}
-        ${['branches','audit'].includes(state.page) ? '' : dateRangeHtml()}
+        ${['branches','audit','items','stockcount'].includes(state.page) ? '' : dateRangeHtml()}
         <span class="date-chip live-clock" id="liveClock" title="${TT('الوقت والتاريخ حسب ساعة هذا الجهاز','Date and time from this computer\'s clock')}">${liveClockText()}</span>
         <div class="lang-switch">
           <button class="lang-btn ${lang==='ar'?'active':''}" id="langAr">AR</button>
@@ -1468,6 +1478,8 @@ function renderInner(){
   if(state.page==='callcenter') main.innerHTML = renderCallCenter();
   if(state.page==='transfers') main.innerHTML = renderTransfers();
   if(state.page==='claims' && authRole==='admin') main.innerHTML = renderClaims();
+  if(state.page==='items') main.innerHTML = renderItems();
+  if(state.page==='stockcount') main.innerHTML = renderStockCount();
   attachPageHandlers();
 }
 
@@ -3276,6 +3288,7 @@ function attachPageHandlers(){
   if(sacc) sacc.onclick = sendAllToCallCenter;
   const trs = document.getElementById('transferSearchInput');
   if(trs) trs.oninput = (e)=>{ transferSearch = e.target.value; render(); };
+  attachPartsHandlers();
 }
 
 
@@ -3291,8 +3304,8 @@ function attachPageHandlers(){
    - Local changes are kept in IndexedDB until Drive confirms them.
    ===================================================================== */
 function TT(ar, en){ return lang==='ar' ? ar : en; }
-const SHARED_KEYS = ['deletions','stockMoves','repairs','inventory','invoices','branches','transfers','auditLog','adminAccount','warehouseAccount','jobSeq','deviceCatalog','serviceLists'];
-const ARRAY_KEYS = ['repairs','inventory','invoices','branches','transfers'];
+const SHARED_KEYS = ['deletions','stockMoves','repairs','inventory','invoices','branches','transfers','partsCatalog','stockCounts','auditLog','adminAccount','warehouseAccount','jobSeq','deviceCatalog','serviceLists'];
+const ARRAY_KEYS = ['repairs','inventory','invoices','branches','transfers','partsCatalog','stockCounts'];
 const APPEND_KEYS = ['auditLog','deletions','stockMoves'];
 const DOC_KEYS = ['adminAccount','warehouseAccount','serviceLists'];
 const AUDIT_CAP = 5000;
@@ -3845,6 +3858,7 @@ function fixDuplicateJobNos(){
 function modalIsOpen(){ return !!document.getElementById('modalOverlay'); }
 function softRender(){
   if(!state.ready) return;
+  { const a = document.activeElement; if(a && a.classList && a.classList.contains('cnt-in')){ a.addEventListener('blur', ()=>setTimeout(softRender, 50), {once:true}); return; } }
   if(modalIsOpen()){ sync.needRenderOnClose = true; return; }
   render();
 }
@@ -4265,7 +4279,7 @@ async function loadAll(){
   await restoreSession();
   if(authRole==='branch' && !state.branches.find(b=>b.id===state.authBranchId)){ authRole = null; state.authBranchId = null; }
   state.currentBranch = authRole==='branch' ? state.authBranchId : (authRole==='warehouse' ? MAIN_WH_ID : 'all');
-  if(authRole==='warehouse' && !['inventory','transfers'].includes(state.page)) state.page = 'inventory';
+  if(authRole==='warehouse' && !['inventory','transfers','items','stockcount'].includes(state.page)) state.page = 'inventory';
   if(needsBranchSave) saveBranches();
   if(needsRepairSave) saveRepairs();
   { let catChanged = false; state.repairs.forEach(r=>{ if(r.deviceBrand && ensureCatalogModel(r.deviceBrand, r.deviceModel)) catChanged = true; }); if(catChanged) saveDeviceCatalog(); }
@@ -6367,9 +6381,10 @@ function partFit(p, type, brand, model){
   const job = splitBrandModel(brand, model), part = splitBrandModel(p.brand, p.model);
   const b = job.key, pb = part.key;
   if(b && pb && pb!==b) return '';
-  const m = normModel(job.model, brand), pm = normModel(part.model, p.brand||brand);
-  if(m && pm && pm!==m) return '';
-  return (m && pm===m) ? 'exact' : 'general';
+  const m = normModel(job.model, brand);
+  const pms = String(part.model||'').split('/').map(x=>normModel(x.trim(), p.brand||brand)).filter(Boolean);
+  if(m && pms.length && !pms.includes(m)) return '';
+  return (m && pms.includes(m)) ? 'exact' : 'general';
 }
 function partOptionsHtml(branchId, type, brand, model){
   const exact = [], general = [];
@@ -6496,7 +6511,7 @@ function openPartModal(id){
     </div>
     <div class="form-2col">
       <div class="form-row"><label>${TT('نوع القطعة','Part type')}</label><select id="p_type" onchange="suggestPartName()"><option value="">${TT('— اختر —','— Choose —')}</option>${(()=>{ const ts = [...partTypeList()]; if(editing&&editing.partType&&!ts.includes(editing.partType)) ts.unshift(editing.partType); return ts.map(t=>`<option value="${t}" ${editing&&editing.partType===t?'selected':''}>${t}</option>`).join(''); })()}</select></div>
-      <div class="form-row"><label>${T('partCode')}</label><input id="p_code" value="${editing?editing.code:''}" class="mono"></div>
+      <div class="form-row"><label>${T('partCode')}</label><input id="p_code" value="${editing?editing.code:''}" class="mono" list="catCodeList" onchange="fillPartFromCatalog()" placeholder="${TT('اختار من الأصناف أو اكتب','Pick from items or type')}">${catalogCodeDatalist()}</div>
     </div>
     <div class="form-2col">
       <div class="form-row"><label>${T('colBrand')}</label><select id="p_brand" onchange="fillPartModelOptions('');suggestPartName()"><option value="">${TT('عام (لكل البراندات)','Generic (all brands)')}</option>${brands.map(b=>`<option value="${b}" ${cb===b?'selected':''}>${b}</option>`).join('')}</select></div>
@@ -7004,6 +7019,673 @@ function partReqReceiveBtn(r){
   const t = state.transfers.find(x=>x.id===pr.transferId && x.status==='in_transit'); if(!t || !canReceiveTransfer(t)) return '';
   return `<button class="btn btn-sm btn-primary pr-receive" onclick="confirmReceiptTransfer('${t.id}')">📦 ${TT('استلام القطعة','Receive part')}: ${t.name}</button>`;
 }
+
+/* =====================================================================
+   v2.1 — SPARE PARTS CATALOG (الأصناف) + BRANCH STOCK COUNT (الجرد)
+   partsCatalog.json : the master list of spare parts (one row per code)
+   stockCounts.json  : count sheets per branch; posting one writes 'count'
+                       stock moves so quantities stay movement-based.
+   ===================================================================== */
+let itemSearch = '', itemBrandFilter = '', itemTypeFilter = '';
+let countOpenId = null, countSearch = '', countBrandFilter = '', countDiffOnly = false, countHideZero = false;
+
+function normCode(c){ return String(c||'').trim().toUpperCase().replace(/\s+/g,''); }
+function canEditCatalog(){ return authRole==='admin' || authRole==='warehouse'; }
+function locName(id){ return id===MAIN_WH_ID ? T('mainWarehouse') : branchName(id); }
+function catItemLabel(c){ return c.nameAr || c.nameEn || c.partType || c.code; }
+function catByCode(code){ const n = normCode(code); return n ? (state.partsCatalog||[]).find(c=>normCode(c.code)===n) : null; }
+function catBrands(){ return [...new Set((state.partsCatalog||[]).map(c=>c.brand).filter(Boolean))].sort((a,b)=>a.localeCompare(b)); }
+
+// Material / part name -> one of the system part types
+function mapPartType(en, ar){
+  const s = `${en||''} ${ar||''}`;
+  const rules = [
+    ['فليكس شاشة', /flat ?(secondary )?lcd|lcd flex|فليكس شاش|فلات شاش/i],
+    ['غطاء خلفي', /cover|غطاء|ظهر/i],
+    ['شاشة', /screen|lcd|display|شاش/i],
+    ['فريم / هيكل', /chassis|frame|فريم|هيكل|شاصي/i],
+    ['درج الشريحة', /sim ?tray|درج/i],
+    ['هزاز', /vibrat|هزاز/i],
+    ['سماعة داخلية', /earpiece|سماعة داخل|سماعه داخل/i],
+    ['كاميرا خلفية', /rear cam|back cam|كامير?ه? ?خلفي|كاميرا خلفي/i],
+    ['كاميرا أمامية', /front cam|selfie|كامير?ه? ?امامي|كاميرا أمامي/i],
+    ['زر باور / فليكس', /power|باور/i],
+    ['منفذ / بورد الشحن', /charg|sub-?bo?a?rd|شحن/i],
+    ['بصمة', /finger|بصم/i],
+    ['بوردة رئيسية', /mother ?board|main ?board|^\s*board\b|pcba|بورد/i],
+  ];
+  for(const [t, re] of rules) if(re.test(s)) return t;
+  return inferPartType(s) || 'أخرى';
+}
+function brandPrefix(brand){
+  const b = String(brand||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  return (b.slice(0,3) || 'GEN');
+}
+function autoPartCode(brand, model, en, ar){
+  const slug = s=>String(s||'').toUpperCase().replace(/\+/g,'P').replace(/[^A-Z0-9]+/g,'').slice(0,20);
+  const part = slug(en) || slug(mapPartType(en, ar)) || 'PART';
+  let base = [brandPrefix(brand), slug(model)||'GEN', part].join('-');
+  let code = base, i = 2;
+  while(catByCode(code)) code = `${base}-${i++}`;
+  return code;
+}
+// how many of this code are in stock: per location and total
+function stockByCode(code){
+  const n = normCode(code); const out = {total:0, at:{}};
+  if(!n) return out;
+  for(const p of state.inventory){
+    if(p.defective || normCode(p.code)!==n) continue;
+    const q = Number(p.qty)||0; out.total += q; out.at[p.branchId] = (out.at[p.branchId]||0) + q;
+  }
+  return out;
+}
+function saveCatalog(){ return queueSave('partsCatalog'); }
+function saveCounts(){ return queueSave('stockCounts'); }
+
+/* ---------------- ITEMS PAGE ---------------- */
+function filteredCatalog(){
+  let list = [...(state.partsCatalog||[])];
+  if(itemBrandFilter) list = list.filter(c=>c.brand===itemBrandFilter);
+  if(itemTypeFilter) list = list.filter(c=>c.partType===itemTypeFilter);
+  if(itemSearch){
+    const q = itemSearch.toLowerCase();
+    list = list.filter(c=>[c.code,c.brand,c.model,c.nameEn,c.nameAr,c.partType].join(' ').toLowerCase().includes(q));
+  }
+  return list.sort((a,b)=> (a.brand||'').localeCompare(b.brand||'') || String(a.model||'').localeCompare(String(b.model||''), undefined, {numeric:true}) || (a.partType||'').localeCompare(b.partType||'','ar'));
+}
+function renderItems(){
+  const edit = canEditCatalog();
+  const all = state.partsCatalog||[];
+  const list = filteredCatalog();
+  const types = [...new Set(all.map(c=>c.partType).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ar'));
+  const brands = catBrands();
+  const loc = (authRole==='branch') ? state.authBranchId : (state.currentBranch!=='all' ? state.currentBranch : null);
+  const shown = list.slice(0, 600);
+  return `
+    <div class="toolbar">
+      <input class="search-input" id="itemSearch" placeholder="${TT('بحث بالكود أو الموديل أو اسم القطعة','Search code, model or part')}" value="${invAttr(itemSearch)}">
+      <select id="itemBrandFilter"><option value="">${T('allBrands')}</option>${brands.map(b=>`<option value="${invAttr(b)}" ${itemBrandFilter===b?'selected':''}>${invAttr(b)}</option>`).join('')}</select>
+      <select id="itemTypeFilter"><option value="">${TT('كل الأنواع','All types')}</option>${types.map(t=>`<option value="${invAttr(t)}" ${itemTypeFilter===t?'selected':''}>${invAttr(t)}</option>`).join('')}</select>
+      <span style="opacity:.75;font-size:13px;">${list.length} ${TT('صنف','items')}</span>
+      ${edit?`<input type="file" id="importCatalogInput" accept=".xlsx,.xls" multiple style="display:none" onchange="importCatalogExcel(event)">
+      <button class="btn" onclick="document.getElementById('importCatalogInput').click()">${icon('receipt')} ${TT('رفع إكسل الأصناف والجرد','Upload items & stock Excel')}</button>
+      <button class="btn" onclick="downloadCatalogTemplate()">${icon('receipt')} ${TT('قالب الأصناف والجرد','Items & stock template')}</button>`:''}
+      <button class="btn" onclick="exportCatalogExcel()">${icon('receipt')} ${T('exportExcel')}</button>
+      ${edit?`<button class="btn btn-primary" onclick="openCatalogModal()">${icon('plus')} ${TT('صنف جديد','New item')}</button>`:''}
+    </div>
+    <div class="panel">
+      ${list.length ? `
+      <table>
+        <thead><tr><th>${T('colBrand')}</th><th>${T('colCode')}</th><th>${TT('الموديل','Model')}</th><th>${TT('القطعة','Part')}</th><th>${TT('النوع','Type')}</th><th>${TT('السعر','Price')}</th><th>${loc?TT('رصيد','Stock')+' · '+locName(loc):TT('الرصيد الكلي','Total stock')}</th>${edit?'<th></th>':''}</tr></thead>
+        <tbody>
+          ${shown.map(c=>{ const s = stockByCode(c.code); const q = loc ? (s.at[loc]||0) : s.total;
+            const tip = Object.entries(s.at).filter(([,v])=>v).map(([k,v])=>`${locName(k)}: ${v}`).join(' | ');
+            return `<tr>
+            <td>${invAttr(c.brand||'-')}</td>
+            <td class="mono">${invAttr(c.code)}</td>
+            <td><bdi>${invAttr(c.model||'-')}</bdi></td>
+            <td>${invAttr(c.nameEn||'')}${c.nameAr?`<div style="font-size:12px;color:var(--muted);">${invAttr(c.nameAr)}</div>`:''}</td>
+            <td><span class="status-badge badge-branch" style="font-size:10.5px;">${invAttr(c.partType||'-')}</span></td>
+            <td class="mono">${c.price?money(c.price):'-'}</td>
+            <td class="mono" title="${invAttr(tip)}">${q}</td>
+            ${edit?`<td style="white-space:nowrap;"><button class="btn btn-sm" onclick="openCatalogModal('${c.id}')">${icon('edit')}</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteCatalogItem('${c.id}')">${icon('del')}</button></td>`:''}
+          </tr>`; }).join('')}
+        </tbody>
+      </table>
+      ${list.length>shown.length?`<p style="font-size:12px;color:var(--muted);padding:8px 12px;">${TT(`يظهر أول ${shown.length} صنف. استخدم البحث أو الفلاتر حتى تشوف الباقي.`, `Showing the first ${shown.length}. Use search or filters to see the rest.`)}</p>`:''}`
+      : emptyState(TT('ماكو أصناف بعد','No items yet'), edit ? TT('استورد ملف الأصناف (إكسل) أو أضف صنف جديد. نزّل «قالب الأصناف» حتى تشوف الأعمدة المطلوبة.','Import the items Excel file or add an item. Download the "Items template" to see the columns.') : TT('الإدارة أو المخزن الرئيسي يضيفون الأصناف.','The admin or the main warehouse adds the items.'))}
+    </div>`;
+}
+function openCatalogModal(id){
+  if(!canEditCatalog()){ alert(T('alertNoPermission')); return; }
+  const c = id ? state.partsCatalog.find(x=>x.id===id) : null;
+  const types = [...partTypeList()]; if(c && c.partType && !types.includes(c.partType)) types.unshift(c.partType);
+  const brands = [...new Set([...catalogBrands(), ...catBrands()])]; if(c && c.brand && !brands.includes(c.brand)) brands.unshift(c.brand);
+  showModal(`
+    <h3>${c?TT('تعديل صنف','Edit item'):TT('صنف جديد','New item')}</h3>
+    <div class="form-2col">
+      <div class="form-row"><label>${T('colBrand')}</label><select id="c_brand">${brands.map(b=>`<option ${c&&c.brand===b?'selected':''}>${invAttr(b)}</option>`).join('')}</select></div>
+      <div class="form-row"><label>${TT('الموديل (أكثر من موديل افصل بـ /)','Model (separate several with /)')}</label><input id="c_model" value="${c?invAttr(c.model||''):''}"></div>
+    </div>
+    <div class="form-2col">
+      <div class="form-row"><label>${TT('اسم القطعة بالإنگليزي','Part name (English)')}</label><input id="c_en" value="${c?invAttr(c.nameEn||''):''}" oninput="catSuggestType()"></div>
+      <div class="form-row"><label>${TT('اسم القطعة بالعربي','Part name (Arabic)')}</label><input id="c_ar" value="${c?invAttr(c.nameAr||''):''}" oninput="catSuggestType()"></div>
+    </div>
+    <div class="form-2col">
+      <div class="form-row"><label>${TT('نوع القطعة','Part type')}</label><select id="c_type">${types.map(t=>`<option ${c&&c.partType===t?'selected':''}>${invAttr(t)}</option>`).join('')}</select></div>
+      <div class="form-row"><label>${T('colCode')}</label><input id="c_code" class="mono" value="${c?invAttr(c.code):''}" placeholder="${TT('يتولد تلقائياً إذا تركته فارغ','Generated automatically if left empty')}"></div>
+    </div>
+    <div class="form-row"><label>${TT('سعر القطعة (دينار)','Part price (IQD)')}</label><input id="c_price" type="text" inputmode="numeric" class="money-in" onblur="this.value=fmtIQDInput(this.value)" value="${c&&c.price?money(c.price):''}"></div>
+    ${c?`<label style="display:flex;gap:8px;align-items:center;font-size:13px;margin:6px 0;"><input type="checkbox" id="c_syncPrice" checked> ${TT('حدّث سعر البيع لهذا الكود بكل المخازن','Update the sell price of this code in every location')}</label>`:''}
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="saveCatalogItem(${c?`'${c.id}'`:'null'})">${T('save')}</button>
+      <button class="btn" onclick="closeModal()">${T('cancel')}</button>
+    </div>`);
+  const tEl = document.getElementById('c_type'); if(tEl) tEl.dataset.auto = c ? '0' : '1';
+  if(tEl) tEl.onchange = ()=>{ tEl.dataset.auto = '0'; };
+}
+function catSuggestType(){
+  const tEl = document.getElementById('c_type'); if(!tEl || tEl.dataset.auto!=='1') return;
+  const t = mapPartType(document.getElementById('c_en').value, document.getElementById('c_ar').value);
+  if([...tEl.options].some(o=>o.value===t)) tEl.value = t;
+}
+function saveCatalogItem(id){
+  if(!canEditCatalog()){ alert(T('alertNoPermission')); return; }
+  const c = id ? state.partsCatalog.find(x=>x.id===id) : null;
+  const brand = document.getElementById('c_brand').value.trim();
+  const model = document.getElementById('c_model').value.trim();
+  const nameEn = document.getElementById('c_en').value.trim();
+  const nameAr = document.getElementById('c_ar').value.trim();
+  const partType = document.getElementById('c_type').value.trim();
+  const price = parseIQD(document.getElementById('c_price').value);
+  let code = document.getElementById('c_code').value.trim();
+  if(!nameEn && !nameAr){ alert(TT('اكتب اسم القطعة','Enter the part name')); return; }
+  if(!code) code = autoPartCode(brand, model, nameEn, nameAr);
+  const dup = catByCode(code);
+  if(dup && dup.id!==id){ alert(TT(`الكود ${code} موجود أصلاً (${catItemLabel(dup)} · ${dup.model||''}).`, `Code ${code} already exists (${catItemLabel(dup)} · ${dup.model||''}).`)); return; }
+  const fields = {code, brand, model, nameEn, nameAr, partType, price};
+  if(c){
+    const oldCode = c.code, oldPrice = c.price;
+    Object.assign(c, fields);
+    const sync = document.getElementById('c_syncPrice');
+    let touched = 0;
+    for(const p of state.inventory){
+      if(p.defective || normCode(p.code)!==normCode(oldCode)) continue;
+      if(normCode(oldCode)!==normCode(code)){ p.code = code; touched++; }
+      if(sync && sync.checked && price && price!==oldPrice){ p.sellPrice = price; touched++; }
+    }
+    if(touched) saveInventory();
+    logAudit('catalog_edit', authRole, currentActorName(), `${TT('تعديل صنف','Item edited')}: ${code} ${catItemLabel(c)}`);
+  }else{
+    state.partsCatalog.push({id:uid(), ...fields});
+    logAudit('catalog_add', authRole, currentActorName(), `${TT('صنف جديد','Item added')}: ${code} ${nameEn||nameAr}`);
+  }
+  saveCatalog(); closeModal(); render();
+}
+function deleteCatalogItem(id){
+  if(!canEditCatalog()){ alert(T('alertNoPermission')); return; }
+  const c = state.partsCatalog.find(x=>x.id===id); if(!c) return;
+  const s = stockByCode(c.code);
+  if(!confirm(TT(`تحذف الصنف ${c.code} (${catItemLabel(c)})؟${s.total?`\nملاحظة: بالمخازن أكو ${s.total} قطعة بهذا الكود، تبقى بالمخزن.`:''}`, `Delete item ${c.code} (${catItemLabel(c)})?${s.total?`\nNote: ${s.total} pcs with this code stay in stock.`:''}`))) return;
+  state.partsCatalog.splice(state.partsCatalog.indexOf(c), 1);
+  addDeletion('partsCatalog', id);
+  logAudit('catalog_delete', authRole, currentActorName(), `${TT('حذف صنف','Item deleted')}: ${c.code}`);
+  saveCatalog(); render();
+}
+
+// a column header that names a stock location: main warehouse, a branch name / username / city code
+function matchLocHeader(h){
+  const x = String(h||'').trim().toLowerCase().replace(/\s+/g,' ');
+  if(!x) return null;
+  if(['المخزن الرئيسي','المخزن','main warehouse','main wh','warehouse','wh'].includes(x) || x===String(STR.ar.mainWarehouse).toLowerCase() || x===String(STR.en.mainWarehouse).toLowerCase()) return MAIN_WH_ID;
+  for(const b of state.branches){
+    const nm = String(b.name||'').toLowerCase(), un = String(b.username||'').toLowerCase();
+    const city = (nm.split('-')[1]||'').toLowerCase();
+    if(x===nm || x===un || (city && (x===city || x===`svc-${city}`))) return b.id;
+  }
+  return null;
+}
+function locHeaders(){ return [[MAIN_WH_ID, STR.ar.mainWarehouse], ...state.branches.map(b=>[b.id, b.name])]; }
+// sets the stock of each catalog item at each location to the given number (movement = 'count')
+function applyStockSets(sets){
+  recomputeQty();
+  const last = new Map(); for(const s of sets) last.set(s.loc+'|'+normCode(s.item.code), s);
+  const ref = 'IMPORT-' + new Date().toISOString().slice(0,10);
+  let changed = 0, created = 0, same = 0;
+  for(const s of last.values()){
+    const it = s.item; const k = normCode(it.code);
+    const rows = state.inventory.filter(p=>p.branchId===s.loc && !p.defective && normCode(p.code)===k);
+    const cur = rows.reduce((a,p)=>a+(Number(p.qty)||0),0);
+    const diff = s.qty - cur;
+    if(!rows.length){
+      if(!s.qty){ same++; continue; }
+      newStockItem({branchId:s.loc, code:it.code, name:[it.partType||it.nameEn||it.nameAr, it.brand, it.model].filter(Boolean).join(' '), brand:it.brand||'', partType:it.partType||'', model:it.model||'', threshold:2, costPrice:0, sellPrice:Number(it.price)||0}, s.qty, 'count');
+      created++; continue;
+    }
+    if(!diff){ same++; continue; }
+    addMove(rows[0].id, diff, 'count', ref); changed++;
+  }
+  if(changed||created){
+    saveStockMoves(); saveInventory();
+    logAudit('stock_count', authRole, currentActorName(), `${TT('استيراد كميات من إكسل','Stock imported from Excel')}: ${changed} ${TT('تصحيح','corrected')} / ${created} ${TT('جديد','new')}`);
+  }
+  return {changed, created, same};
+}
+const CAT_TEMPLATE_HEAD =['Brand','Code','Model','Part (EN)','Part (AR)','Part Type','Price (IQD)'];
+function downloadCatalogTemplate(){
+  if(typeof XLSX==='undefined'){ alert(T('importError')); return; }
+  const lh = locHeaders();
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([[...CAT_TEMPLATE_HEAD, ...lh.map(x=>x[1])],
+    ['Oukitel','ZS155-55-002','C61','LCD','شاشة','شاشة',52500, ...lh.map((x,i)=>i===0?20:'')],
+    ['Oukitel','ZS160-55-002','C17 / C2','LCD','شاشة','شاشة',55500, ...lh.map(()=> '')],
+    ['ZTE','ZTE-A36-BAT-01','A36','Battery','بطارية','بطارية',10000, ...lh.map((x,i)=>i<3?5:'')]]);
+  ws['!cols'] = [{wch:12},{wch:20},{wch:16},{wch:24},{wch:18},{wch:18},{wch:12}, ...lh.map(()=>({wch:14}))];
+  XLSX.utils.book_append_sheet(wb, ws, 'Items');
+  const help = XLSX.utils.aoa_to_sheet([
+    ['طريقة التعبئة'],
+    ['- كل سطر قطعة وحدة. الكود لازم ما يتكرر. إذا القطعة تركب على أكثر من موديل اكتب الموديلات بخانة وحدة مفصولة بـ /'],
+    ['- إذا تركت الكود فارغ، السستم يولّد كود تلقائياً من الماركة والموديل والقطعة.'],
+    ['- Part Type اختياري. إذا تركته فارغ السستم يحدده من اسم القطعة. القيم المقبولة: '+partTypeList().join('، ')],
+    ['- أعمدة المخزن الرئيسي والفروع = الكمية الموجودة فعلاً (الجرد). الخانة الفارغة ما تغيّر شي، والصفر يعني ماكو.'],
+    ['- لا تغيّر أسماء أعمدة الفروع. السطور الثلاثة بشيت Items أمثلة، امسحها قبل الرفع.']]);
+  help['!cols'] = [{wch:120}];
+  XLSX.utils.book_append_sheet(wb, help, 'Help');
+  XLSX.writeFile(wb, 'parts-items-template.xlsx');
+}
+function exportCatalogExcel(){
+  if(typeof XLSX==='undefined'){ alert(T('importError')); return; }
+  const lh = locHeaders();
+  const rows = filteredCatalog().map(c=>{ const s = stockByCode(c.code); return [c.brand, c.code, c.model, c.nameEn, c.nameAr, c.partType, c.price||0, ...lh.map(([l])=>s.at[l]||0), s.total]; });
+  const ws = XLSX.utils.aoa_to_sheet([[...CAT_TEMPLATE_HEAD, ...lh.map(x=>x[1]), 'Total'], ...rows]);
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Items');
+  XLSX.writeFile(wb, `parts-items-${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+// Reads the item sheets (template or the brand WH files) and adds / updates the catalog by code
+function importCatalogExcel(evt){
+  const files = [...(evt.target.files||[])];
+  evt.target.value = '';
+  if(!files.length) return;
+  if(!canEditCatalog()){ alert(T('alertNoPermission')); return; }
+  if(typeof XLSX==='undefined'){ alert(T('importError')); return; }
+  const H = s=>String(s||'').trim().toLowerCase().replace(/\s+/g,' ');
+  const COLS = {
+    brand:['brand','الماركة','البراند'],
+    code:['code','item code','part code','الكود','كود القطعة'],
+    model:['model','models','الموديل'],
+    en:['part (en)','material a','part name','part name (en)','اسم القطعة'],
+    ar:['part (ar)','material b','القطعة بالعربي','الاسم بالعربي'],
+    type:['part type','نوع القطعة','النوع'],
+    price:['price (iqd)','spare part price (iqd)','part price (iqd)','new price iqd','price iqd','price','السعر','سعر القطعة'],
+  };
+  let added = 0, updated = 0, skipped = 0, sheetsUsed = [];
+  const stockSets = []; // {item, loc, qty} from the location columns
+  const locCols = row=>{ const out = []; row.forEach((h,j)=>{ const l = matchLocHeader(h); if(l) out.push([j,l]); }); return out; };
+  const knownBrands = [...new Set([...catalogBrands(), ...catBrands(), ...KNOWN_BRANDS])];
+  const brandFromName = n=>{ const x = String(n||'').toLowerCase(); return knownBrands.find(b=>x.includes(b.toLowerCase())) || ''; };
+  const readOne = file=>new Promise(res=>{
+    const r = new FileReader();
+    r.onload = e=>{
+      try{
+        const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+        for(const sn of wb.SheetNames){
+          const aoa = XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, defval:'', raw:true});
+          let hi = -1, idx = {};
+          for(let i=0;i<Math.min(aoa.length,15);i++){
+            const row = aoa[i].map(H); const m = {};
+            for(const [k, names] of Object.entries(COLS)){
+              // price: first name in the list wins (the final part price), others: first matching column
+              for(const nm of names){ const j = row.indexOf(nm); if(j>=0){ m[k] = j; break; } }
+            }
+            if(m.model!==undefined && (m.en!==undefined || m.ar!==undefined)){ hi = i; idx = m; break; }
+          }
+          if(hi<0) continue;
+          const sheetBrand = brandFromName(sn) || brandFromName(file.name);
+          const lc = locCols(aoa[hi]);
+          let used = 0;
+          for(const row of aoa.slice(hi+1)){
+            const g = k=> idx[k]===undefined ? '' : row[idx[k]];
+            const model = String(g('model')).trim();
+            const en = String(g('en')).trim(), ar = String(g('ar')).trim();
+            if(!model || (!en && !ar)){ if(row.some(v=>String(v).trim())) skipped++; continue; }
+            const brand = String(g('brand')).trim() || sheetBrand;
+            let code = String(g('code')).trim();
+            if(/^\d+\.0+$/.test(code)) code = code.replace(/\.0+$/,'');
+            const price = parseIQD(g('price')) || 0;
+            const partType = (String(g('type')).trim() && partTypeList().includes(String(g('type')).trim())) ? String(g('type')).trim() : mapPartType(en, ar);
+            let ex = code ? catByCode(code) : (state.partsCatalog||[]).find(c=>c.brand===brand && H(c.model)===H(model) && H(c.nameEn)===H(en) && H(c.nameAr)===H(ar));
+            if(ex){
+              // same code on another model = the part fits both
+              const ms = String(ex.model||'').split('/').map(s=>s.trim()).filter(Boolean);
+              if(!ms.some(m=>H(m)===H(model))) ms.push(model);
+              Object.assign(ex, {model: ms.join(' / '), brand: brand||ex.brand, nameEn: en||ex.nameEn, nameAr: ar||ex.nameAr, partType, price: price||ex.price});
+              updated++;
+            }else{
+              if(!code) code = autoPartCode(brand, model, en, ar);
+              ex = {id:uid(), code, brand, model, nameEn:en, nameAr:ar, partType, price};
+              state.partsCatalog.push(ex);
+              added++;
+            }
+            for(const [j, loc] of lc){
+              const q = String(row[j]===undefined?'':row[j]).trim();
+              if(q==='') continue;
+              const n = Number(latinDigits(q));
+              if(!isFinite(n) || n<0) continue;
+              stockSets.push({item:ex, loc, qty:Math.floor(n)});
+            }
+            used++;
+          }
+          if(used) sheetsUsed.push(`${sn} (${used})`);
+        }
+      }catch(err){ console.warn(err); }
+      res();
+    };
+    r.readAsArrayBuffer(file);
+  });
+  (async()=>{
+    for(const f of files) await readOne(f);
+    if(added||updated){ saveCatalog(); logAudit('catalog_import', authRole, currentActorName(), `${TT('استيراد أصناف','Items import')}: +${added} / ~${updated}`); }
+    let stockMsg = '';
+    if(stockSets.length){
+      const locs = [...new Set(stockSets.map(s=>s.loc))];
+      if(confirm(TT(`الملف بيه كميات لـ ${locs.length} مكان (${locs.map(locName).join('، ')}).\nراح تصير كمية كل قطعة بكل مكان مثل الرقم اللي بالملف، والفرق ينسجل كحركة «جرد / تصحيح». الخانات الفارغة ما تتغير.\nتكمل؟`,
+        `The file has quantities for ${locs.length} location(s) (${locs.map(locName).join(', ')}).\nEach part's stock will be set to the number in the file; differences are logged as "Count correction". Empty cells stay unchanged.\nContinue?`))){
+        const r = applyStockSets(stockSets);
+        stockMsg = TT(`\nالكميات: ${r.changed} تصحيح، ${r.created} صنف جديد بالمخازن، ${r.same} مطابقة.`, `\nStock: ${r.changed} corrected, ${r.created} new stock rows, ${r.same} unchanged.`);
+      }
+    }
+    render();
+    alert(sheetsUsed.length
+      ? TT(`تم الاستيراد.\nأصناف جديدة: ${added}\nتحديث: ${updated}\nسطور ناقصة تخطيناها: ${skipped}\nالشيتات: ${sheetsUsed.join('، ')}`, `Imported.\nNew items: ${added}\nUpdated: ${updated}\nIncomplete rows skipped: ${skipped}\nSheets: ${sheetsUsed.join(', ')}`) + stockMsg
+      : TT('ما لگينا شيت بيه أعمدة الموديل واسم القطعة. استخدم «قالب الأصناف».','No sheet with Model and Part columns was found. Use the "Items template".'));
+  })();
+}
+
+/* ---------------- STOCK COUNT PAGE ---------------- */
+const COUNT_STATUS = {draft:['مسودة','Draft','badge-quote-pending'], submitted:['بانتظار الاعتماد','Awaiting approval','status-1'], posted:['معتمد','Posted','badge-quote-ok'], cancelled:['ملغي','Cancelled','status-8']};
+function countStatusBadge(c){ const s = COUNT_STATUS[c.status]||COUNT_STATUS.draft; return `<span class="status-badge ${s[2]}">${lang==='ar'?s[0]:s[1]}</span>`; }
+function visibleCounts(){
+  const all = state.stockCounts||[];
+  if(authRole==='branch') return all.filter(c=>c.branchId===state.authBranchId);
+  if(authRole==='warehouse' && state.currentBranch==='all') return all;
+  return state.currentBranch==='all' ? all : all.filter(c=>c.branchId===state.currentBranch);
+}
+function canPostCount(){ return authRole==='admin' || authRole==='warehouse'; }
+function canEditCount(c){
+  if(!c || c.status==='posted' || c.status==='cancelled') return false;
+  if(authRole==='branch') return c.branchId===state.authBranchId && c.status==='draft';
+  return canPostCount();
+}
+// the lines of a count: every catalog item in scope + any other stock row the location already has
+function countLines(c){
+  const scope = c.brand || '';
+  const inv = state.inventory.filter(p=>p.branchId===c.branchId && !p.defective && (!scope || (p.brand||'')===scope));
+  const byCode = new Map(); for(const p of inv) if(p.code) byCode.set(normCode(p.code), (byCode.get(normCode(p.code))||[]).concat(p));
+  const lines = [];
+  for(const it of (state.partsCatalog||[])){
+    if(scope && it.brand!==scope) continue;
+    const k = normCode(it.code); const rows = byCode.get(k)||[];
+    lines.push({key:k, code:it.code, brand:it.brand, model:it.model, name:it.nameEn||it.nameAr||it.partType, nameAr:it.nameAr, sys: rows.reduce((s,p)=>s+(Number(p.qty)||0),0), cat:it, rows});
+    byCode.delete(k);
+  }
+  for(const p of inv){
+    const k = p.code ? normCode(p.code) : 'inv:'+p.id;
+    if(p.code && !byCode.has(k)) continue; // already listed with its catalog item
+    if(p.code) byCode.delete(k);
+    const rows = p.code ? inv.filter(x=>normCode(x.code)===k) : [p];
+    lines.push({key:k, code:p.code||'-', brand:p.brand, model:p.model, name:p.name, nameAr:'', sys: rows.reduce((s,x)=>s+(Number(x.qty)||0),0), cat:null, rows, extra:true});
+  }
+  return lines;
+}
+function renderStockCount(){
+  if(countOpenId){ const c = (state.stockCounts||[]).find(x=>x.id===countOpenId); if(c) return renderCountSheet(c); countOpenId = null; }
+  const list = [...visibleCounts()].sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+  const waiting = list.filter(c=>c.status==='submitted').length;
+  return `
+    <div class="toolbar">
+      <button class="btn btn-primary" onclick="openNewCountModal()">${icon('plus')} ${TT('جرد جديد','New count')}</button>
+      ${canPostCount() && waiting ? `<span class="status-badge status-1">${waiting} ${TT('جرد بانتظار اعتمادك','count(s) awaiting your approval')}</span>` : ''}
+    </div>
+    <p style="font-size:12.5px;color:var(--muted);margin:-4px 0 12px;line-height:1.8;">${authRole==='branch'
+      ? TT('الفرع يعد القطع ويكتب الكمية الفعلية، وبعدها يرسل الجرد. الكميات ما تتغير إلا بعد ما الإدارة أو المخزن الرئيسي يعتمدونه.','The branch counts the parts, enters the real quantities and sends the count. Quantities change only after the admin or the main warehouse approves it.')
+      : TT('الجرد يقارن الكمية الفعلية ويه كمية السستم. لما تعتمده، الفرق ينسجل كحركة «جرد / تصحيح» بسجل كل قطعة. القطعة اللي ما انكتب إلها عدد تبقى مثل ما هي.','A count compares the real quantity with the system quantity. Posting it records each difference as a "Count correction" movement. Items left blank stay unchanged.')}</p>
+    <div class="panel">
+      ${list.length ? `<table>
+        <thead><tr><th>${TT('رقم','No.')}</th><th>${T('colBranch')}</th><th>${T('colBrand')}</th><th>${TT('التاريخ','Date')}</th><th>${TT('بواسطة','By')}</th><th>${TT('الحالة','Status')}</th><th>${TT('الأصناف المعدودة','Counted')}</th><th>${TT('صافي الفرق','Net difference')}</th><th></th></tr></thead>
+        <tbody>${list.map(c=>{
+          const n = Object.values(c.counts||{}).filter(v=>v!==''&&v!==null&&v!==undefined).length;
+          const net = c.status==='posted' ? (c.result||[]).reduce((s,r)=>s+(Number(r.diff)||0),0) : null;
+          return `<tr>
+            <td class="mono">${invAttr(c.no||'')}</td>
+            <td>${locName(c.branchId)}</td>
+            <td>${invAttr(c.brand||TT('كل الماركات','All brands'))}</td>
+            <td class="mono">${fmtDateTime(c.createdAt)}</td>
+            <td>${invAttr(c.by||'')}</td>
+            <td>${countStatusBadge(c)}</td>
+            <td class="mono">${n}</td>
+            <td class="mono" dir="ltr" style="${net<0?'color:var(--red);':''}">${net===null?'-':(net>0?'+':'')+net}</td>
+            <td style="white-space:nowrap;"><button class="btn btn-sm" onclick="openCount('${c.id}')">${TT('فتح','Open')}</button>
+              ${(c.status==='draft' && (canPostCount() || c.branchId===state.authBranchId)) ? `<button class="btn btn-sm btn-danger" onclick="deleteCount('${c.id}')">${icon('del')}</button>` : ''}</td>
+          </tr>`; }).join('')}</tbody>
+      </table>` : emptyState(TT('ماكو جرد بعد','No counts yet'), TT('اضغط «جرد جديد» واختار الفرع.','Press "New count" and choose the location.'))}
+    </div>`;
+}
+function openCount(id){ countOpenId = id; countSearch=''; countDiffOnly=false; countBrandFilter=''; render(); }
+function openNewCountModal(){
+  if(!(state.partsCatalog||[]).length && !confirm(TT('ماكو أصناف بالسستم بعد، فالجرد راح يطلع بس القطع الموجودة بمخزن الفرع. تكمل؟','There are no items in the catalog yet, so the count will only list parts already in stock. Continue?'))) return;
+  const locs = authRole==='branch' ? [state.authBranchId] : [MAIN_WH_ID, ...state.branches.map(b=>b.id)];
+  const cur = authRole==='branch' ? state.authBranchId : (state.currentBranch!=='all' ? state.currentBranch : (authRole==='warehouse'?MAIN_WH_ID:state.branches[0]&&state.branches[0].id));
+  const brands = [...new Set([...catBrands(), ...state.inventory.map(p=>p.brand).filter(Boolean)])].sort();
+  showModal(`
+    <h3>${TT('جرد جديد','New stock count')}</h3>
+    <div class="form-row"><label>${T('branchLabel')}</label><select id="sc_branch" ${authRole==='branch'?'disabled':''}>${locs.map(l=>`<option value="${l}" ${l===cur?'selected':''}>${locName(l)}</option>`).join('')}</select></div>
+    <div class="form-row"><label>${T('colBrand')}</label><select id="sc_brand"><option value="">${TT('كل الماركات','All brands')}</option>${brands.map(b=>`<option>${invAttr(b)}</option>`).join('')}</select></div>
+    <div class="form-row"><label>${TT('ملاحظة','Note')}</label><input id="sc_note" placeholder="${TT('مثلاً: جرد نهاية الشهر','e.g. month-end count')}"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="createCount()">${TT('ابدأ الجرد','Start count')}</button>
+      <button class="btn" onclick="closeModal()">${T('cancel')}</button>
+    </div>`);
+}
+function createCount(){
+  const branchId = authRole==='branch' ? state.authBranchId : document.getElementById('sc_branch').value;
+  const brand = document.getElementById('sc_brand').value;
+  const open = (state.stockCounts||[]).find(c=>c.branchId===branchId && (c.status==='draft'||c.status==='submitted') && (c.brand||'')===brand);
+  if(open){ closeModal(); alert(TT('أكو جرد مفتوح لنفس الفرع والماركة، فتحتلك ياه.','There is already an open count for this location and brand. It has been opened.')); openCount(open.id); return; }
+  const d = new Date(); const seq = (state.stockCounts||[]).filter(c=>c.branchId===branchId).length + 1;
+  const code = branchId===MAIN_WH_ID ? 'WH' : (branchCode(branchId)||'BR');
+  const c = {id:uid(), no:`CNT-${code}-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}-${seq}`, branchId, brand, note:document.getElementById('sc_note').value.trim(),
+    status:'draft', createdAt:d.toISOString(), by:currentActorName(), counts:{}};
+  state.stockCounts.push(c);
+  logAudit('stock_count', authRole, currentActorName(), `${TT('بدء جرد','Count started')}: ${c.no} (${locName(branchId)})`);
+  saveCounts(); closeModal(); openCount(c.id);
+}
+function deleteCount(id){
+  const c = state.stockCounts.find(x=>x.id===id); if(!c || c.status!=='draft') return;
+  if(!confirm(TT(`تحذف الجرد ${c.no}؟`, `Delete count ${c.no}?`))) return;
+  state.stockCounts.splice(state.stockCounts.indexOf(c),1); addDeletion('stockCounts', id);
+  if(countOpenId===id) countOpenId = null;
+  saveCounts(); render();
+}
+function renderCountSheet(c){
+  const posted = c.status==='posted';
+  const editable = canEditCount(c);
+  let lines = posted ? (c.result||[]).map(r=>({...r, sys:r.sys})) : countLines(c);
+  const brands = [...new Set(lines.map(l=>l.brand).filter(Boolean))].sort();
+  const counts = c.counts||{};
+  const val = l=> posted ? l.counted : counts[l.key];
+  const has = v=> v!=='' && v!==null && v!==undefined;
+  if(countBrandFilter) lines = lines.filter(l=>l.brand===countBrandFilter);
+  if(countSearch){ const q = countSearch.toLowerCase(); lines = lines.filter(l=>[l.code,l.brand,l.model,l.name,l.nameAr].join(' ').toLowerCase().includes(q)); }
+  if(countDiffOnly) lines = lines.filter(l=>has(val(l)) && Number(val(l))!==Number(l.sys));
+  if(countHideZero) lines = lines.filter(l=>Number(l.sys)!==0 || has(val(l)));
+  const all = posted ? (c.result||[]) : countLines(c);
+  const done = all.filter(l=>has(posted?l.counted:counts[l.key])).length;
+  const diffs = all.filter(l=>{ const v = posted?l.counted:counts[l.key]; return has(v) && Number(v)!==Number(l.sys); });
+  const plus = diffs.reduce((s,l)=>s+Math.max(0,Number(posted?l.counted:counts[l.key])-Number(l.sys)),0);
+  const minus = diffs.reduce((s,l)=>s+Math.min(0,Number(posted?l.counted:counts[l.key])-Number(l.sys)),0);
+  const shown = lines.slice(0, 800);
+  return `
+    <div class="toolbar">
+      <button class="btn" onclick="countOpenId=null;render();">← ${TT('رجوع','Back')}</button>
+      <b>${invAttr(c.no||'')}</b> · ${locName(c.branchId)} · ${invAttr(c.brand||TT('كل الماركات','All brands'))} ${countStatusBadge(c)}
+    </div>
+    <div class="toolbar">
+      <input class="search-input" id="countSearch" placeholder="${TT('بحث بالكود أو الموديل أو القطعة','Search code, model or part')}" value="${invAttr(countSearch)}">
+      ${brands.length>1?`<select id="countBrandFilter"><option value="">${T('allBrands')}</option>${brands.map(b=>`<option ${countBrandFilter===b?'selected':''}>${invAttr(b)}</option>`).join('')}</select>`:''}
+      <label style="display:flex;gap:6px;align-items:center;font-size:13px;"><input type="checkbox" id="countDiffOnly" ${countDiffOnly?'checked':''}> ${TT('بس الفروقات','Differences only')}</label>
+      <label style="display:flex;gap:6px;align-items:center;font-size:13px;"><input type="checkbox" id="countHideZero" ${countHideZero?'checked':''}> ${TT('اخفي الأصفار','Hide zero stock')}</label>
+      <button class="btn" onclick="exportCountExcel('${c.id}')">${icon('receipt')} ${TT('ورقة الجرد إكسل','Count sheet Excel')}</button>
+      ${editable?`<input type="file" id="importCountInput" accept=".xlsx,.xls" style="display:none" onchange="importCountExcel(event,'${c.id}')">
+      <button class="btn" onclick="document.getElementById('importCountInput').click()">${icon('receipt')} ${TT('استيراد الكميات المعدودة','Import counted qty')}</button>
+      <button class="btn" onclick="fillCountWithSystem('${c.id}')">${TT('عبّي الفارغ بكمية السستم','Fill blanks with system qty')}</button>`:''}
+    </div>
+    <div class="kpi-row" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+      <div class="panel" style="padding:10px 14px;margin:0;">${TT('الأصناف','Items')}: <b>${all.length}</b></div>
+      <div class="panel" style="padding:10px 14px;margin:0;">${TT('انعدّت','Counted')}: <b>${done}</b></div>
+      <div class="panel" style="padding:10px 14px;margin:0;">${TT('بيها فرق','With difference')}: <b>${diffs.length}</b></div>
+      <div class="panel" style="padding:10px 14px;margin:0;">${TT('زيادة','Surplus')}: <b style="color:var(--green);" dir="ltr">+${plus}</b> · ${TT('نقص','Shortage')}: <b style="color:var(--red);" dir="ltr">${minus}</b></div>
+    </div>
+    ${c.note?`<p style="font-size:13px;color:var(--muted);margin:0 0 10px;">${TT('ملاحظة','Note')}: ${invAttr(c.note)}</p>`:''}
+    <div class="panel">
+      ${shown.length?`<table>
+        <thead><tr><th>${T('colCode')}</th><th>${T('colBrand')}</th><th>${TT('الموديل','Model')}</th><th>${TT('القطعة','Part')}</th><th>${TT('كمية السستم','System qty')}</th><th>${TT('الكمية الفعلية','Counted')}</th><th>${TT('الفرق','Diff')}</th></tr></thead>
+        <tbody>${shown.map(l=>{ const v = val(l); const d = has(v) ? Number(v)-Number(l.sys) : null;
+          return `<tr class="${d?'low-stock':''}">
+            <td class="mono">${invAttr(l.code)}</td><td>${invAttr(l.brand||'-')}</td><td><bdi>${invAttr(l.model||'-')}</bdi></td>
+            <td>${invAttr(l.name||'')}${l.nameAr&&l.nameAr!==l.name?`<div style="font-size:12px;color:var(--muted);">${invAttr(l.nameAr)}</div>`:''}${l.extra?` <span class="status-badge badge-quote-pending" style="font-size:10px;">${TT('مو بالأصناف','Not in catalog')}</span>`:''}</td>
+            <td class="mono">${l.sys}</td>
+            <td>${editable?`<input class="cnt-in mono" type="number" min="0" inputmode="numeric" style="width:90px;" data-k="${invAttr(l.key)}" data-c="${c.id}" value="${has(v)?v:''}">`:`<span class="mono">${has(v)?v:'-'}</span>`}</td>
+            <td class="mono" dir="ltr" style="${d<0?'color:var(--red);font-weight:700;':d>0?'color:var(--green);font-weight:700;':''}">${d===null?'':(d>0?'+':'')+d}</td>
+          </tr>`; }).join('')}</tbody>
+      </table>${lines.length>shown.length?`<p style="font-size:12px;color:var(--muted);padding:8px 12px;">${TT(`يظهر أول ${shown.length}. استخدم البحث أو فلتر الماركة.`, `Showing the first ${shown.length}. Use search or the brand filter.`)}</p>`:''}`
+      : emptyState(TT('ماكو أصناف','No items'), TT('غيّر الفلاتر، أو ضيف أصناف من صفحة الأصناف.','Change the filters or add items on the Items page.'))}
+    </div>
+    <div class="modal-actions" style="justify-content:flex-start;margin-top:12px;">
+      ${c.status==='draft' && editable && authRole==='branch' ? `<button class="btn btn-primary" onclick="submitCount('${c.id}')">${icon('check')} ${TT('إرسال الجرد للاعتماد','Send for approval')}</button>` : ''}
+      ${!posted && c.status!=='cancelled' && canPostCount() ? `<button class="btn btn-primary" onclick="postCount('${c.id}')">${icon('check')} ${TT('اعتماد الجرد وتصحيح الكميات','Post count & correct stock')}</button>` : ''}
+      ${c.status==='submitted' && canPostCount() ? `<button class="btn" onclick="returnCount('${c.id}')">${TT('إرجاع للفرع','Return to branch')}</button>` : ''}
+      ${posted?`<span style="font-size:12.5px;color:var(--muted);">${TT('اعتمده','Posted by')} ${invAttr(c.postedBy||'')} · ${fmtDateTime(c.postedAt)}</span>`:''}
+    </div>`;
+}
+function setCountValue(id, key, raw){
+  const c = state.stockCounts.find(x=>x.id===id); if(!canEditCount(c)) return;
+  c.counts = c.counts || {};
+  const v = String(raw).trim();
+  if(v===''){ delete c.counts[key]; }
+  else{ const n = Math.max(0, Math.floor(Number(latinDigits(v))||0)); c.counts[key] = n; }
+  c.counts = {...c.counts}; // new object so the field timestamp changes
+  saveCounts();
+}
+function fillCountWithSystem(id){
+  const c = state.stockCounts.find(x=>x.id===id); if(!canEditCount(c)) return;
+  const counts = {...(c.counts||{})}; let n = 0;
+  for(const l of countLines(c)) if(counts[l.key]===undefined){ counts[l.key] = Number(l.sys)||0; n++; }
+  if(n && !confirm(TT(`راح تنكتب كمية السستم بـ ${n} خانة فارغة. يعني هاي القطع راح تعتبر مطابقة. تكمل؟`, `${n} empty cells will be filled with the system quantity (counted as matching). Continue?`))) return;
+  c.counts = counts; saveCounts(); render();
+}
+function submitCount(id){
+  const c = state.stockCounts.find(x=>x.id===id); if(!c || c.status!=='draft') return;
+  const n = Object.keys(c.counts||{}).length;
+  if(!n){ alert(TT('ما كتبت ولا كمية بعد.','No quantities entered yet.')); return; }
+  if(!confirm(TT(`ترسل الجرد (${n} صنف معدود) للاعتماد؟ بعدها ما تگدر تعدل عليه.`, `Send the count (${n} items counted) for approval? It cannot be edited afterwards.`))) return;
+  Object.assign(c, {status:'submitted', submittedAt:new Date().toISOString(), submittedBy:currentActorName()});
+  logAudit('stock_count', authRole, currentActorName(), `${TT('إرسال جرد','Count submitted')}: ${c.no}`);
+  saveCounts(); render();
+}
+function returnCount(id){
+  const c = state.stockCounts.find(x=>x.id===id); if(!c || c.status!=='submitted' || !canPostCount()) return;
+  c.status = 'draft'; logAudit('stock_count', authRole, currentActorName(), `${TT('إرجاع جرد للفرع','Count returned')}: ${c.no}`);
+  saveCounts(); render();
+}
+function postCount(id){
+  const c = state.stockCounts.find(x=>x.id===id); if(!c || !canPostCount() || c.status==='posted') return;
+  recomputeQty();
+  const lines = countLines(c); const counts = c.counts||{};
+  const entered = lines.filter(l=>counts[l.key]!==undefined);
+  if(!entered.length){ alert(TT('ما كتبت ولا كمية بعد.','No quantities entered yet.')); return; }
+  const changes = entered.filter(l=>Number(counts[l.key])!==Number(l.sys));
+  if(!confirm(TT(`اعتماد الجرد ${c.no}\n${entered.length} صنف معدود، ${changes.length} بيها فرق.\nالكميات راح تتصحح هسه. تكمل؟`, `Post count ${c.no}\n${entered.length} counted, ${changes.length} with a difference.\nStock will be corrected now. Continue?`))) return;
+  const result = [];
+  for(const l of entered){
+    const counted = Number(counts[l.key])||0; const diff = counted - (Number(l.sys)||0);
+    result.push({key:l.key, code:l.code, brand:l.brand, model:l.model, name:l.name, nameAr:l.nameAr||'', sys:l.sys, counted, diff});
+    if(!diff) continue;
+    let row = l.rows[0];
+    if(!row){
+      const it = l.cat || {};
+      const firstModel = String(it.model||'').split('/')[0].trim();
+      row = newStockItem({branchId:c.branchId, code:it.code||l.code, name:[it.partType||it.nameEn||it.nameAr, it.brand, it.model].filter(Boolean).join(' '), brand:it.brand||'', partType:it.partType||'', model:String(it.model||'').includes('/') ? it.model : firstModel, threshold:2, costPrice:0, sellPrice:Number(it.price)||0}, 0, 'count');
+    }
+    // when one code is split over several rows, the correction lands on the first one
+    addMove(row.id, diff, 'count', c.no);
+  }
+  Object.assign(c, {status:'posted', postedAt:new Date().toISOString(), postedBy:currentActorName(), result});
+  logAudit('stock_count', authRole, currentActorName(), `${TT('اعتماد جرد','Count posted')}: ${c.no} (${locName(c.branchId)}) · ${changes.length} ${TT('فرق','diffs')}`);
+  saveStockMoves(); saveInventory(); saveCounts(); render();
+}
+function exportCountExcel(id){
+  const c = state.stockCounts.find(x=>x.id===id); if(!c) return;
+  if(typeof XLSX==='undefined'){ alert(T('importError')); return; }
+  const posted = c.status==='posted';
+  const lines = posted ? (c.result||[]) : countLines(c);
+  const counts = c.counts||{};
+  const rows = lines.map(l=>{ const v = posted ? l.counted : counts[l.key]; const has = v!==undefined && v!==''; return [l.code, l.brand||'', l.model||'', l.name||'', l.nameAr||'', l.sys, has?v:'', has?Number(v)-Number(l.sys):'']; });
+  const ws = XLSX.utils.aoa_to_sheet([
+    [`${c.no} · ${locName(c.branchId)} · ${c.brand||'All brands'} · ${fmtDateTime(c.createdAt)}`],
+    ['Code','Brand','Model','Part','Part (AR)','System Qty','Counted Qty','Difference'], ...rows]);
+  ws['!cols'] = [{wch:20},{wch:10},{wch:16},{wch:26},{wch:18},{wch:11},{wch:12},{wch:11}];
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Count');
+  XLSX.writeFile(wb, `${c.no}.xlsx`);
+}
+// fills counted quantities from an Excel sheet with Code + Counted Qty columns (e.g. the exported count sheet)
+function importCountExcel(evt, id){
+  const file = evt.target.files[0]; evt.target.value = '';
+  const c = state.stockCounts.find(x=>x.id===id); if(!file || !canEditCount(c)) return;
+  const r = new FileReader();
+  r.onload = e=>{
+    try{
+      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+      const aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, defval:''});
+      const H = s=>String(s||'').trim().toLowerCase();
+      let hi=-1, ci=-1, qi=-1;
+      for(let i=0;i<Math.min(aoa.length,10);i++){
+        const row = aoa[i].map(H);
+        ci = row.findIndex(x=>['code','الكود','كود القطعة','item code'].includes(x));
+        qi = row.findIndex(x=>['counted qty','counted','الكمية الفعلية','العدد','الكمية','qty','quantity'].includes(x));
+        if(ci>=0 && qi>=0){ hi = i; break; }
+      }
+      if(hi<0){ alert(TT('لازم يكون بالشيت عمود Code وعمود Counted Qty.','The sheet needs a Code column and a Counted Qty column.')); return; }
+      const keys = new Set(countLines(c).map(l=>l.key));
+      const counts = {...(c.counts||{})}; let ok=0, unknown=[];
+      for(const row of aoa.slice(hi+1)){
+        const k = normCode(row[ci]); const q = String(row[qi]).trim();
+        if(!k || q==='') continue;
+        if(!keys.has(k)){ unknown.push(row[ci]); continue; }
+        counts[k] = Math.max(0, Math.floor(Number(latinDigits(q))||0)); ok++;
+      }
+      c.counts = counts; saveCounts(); render();
+      alert(TT(`انكتبت ${ok} كمية.${unknown.length?`\nأكواد مو موجودة بهذا الجرد (${unknown.length}): ${unknown.slice(0,15).join('، ')}${unknown.length>15?' …':''}`:''}`, `${ok} quantities filled.${unknown.length?`\nCodes not in this count (${unknown.length}): ${unknown.slice(0,15).join(', ')}${unknown.length>15?' …':''}`:''}`));
+    }catch(err){ alert(T('importError')); }
+  };
+  r.readAsArrayBuffer(file);
+}
+function attachPartsHandlers(){
+  const bind = (id, ev, fn)=>{ const el = document.getElementById(id); if(el) el[ev] = fn; };
+  bind('itemSearch','oninput', e=>{ itemSearch = e.target.value; render(); const el=document.getElementById('itemSearch'); if(el){ el.focus(); el.setSelectionRange(el.value.length, el.value.length); } });
+  bind('itemBrandFilter','onchange', e=>{ itemBrandFilter = e.target.value; render(); });
+  bind('itemTypeFilter','onchange', e=>{ itemTypeFilter = e.target.value; render(); });
+  bind('countSearch','oninput', e=>{ countSearch = e.target.value; render(); const el=document.getElementById('countSearch'); if(el){ el.focus(); el.setSelectionRange(el.value.length, el.value.length); } });
+  bind('countBrandFilter','onchange', e=>{ countBrandFilter = e.target.value; render(); });
+  bind('countDiffOnly','onchange', e=>{ countDiffOnly = e.target.checked; render(); });
+  bind('countHideZero','onchange', e=>{ countHideZero = e.target.checked; render(); });
+  document.querySelectorAll('.cnt-in').forEach(inp=>{
+    inp.onchange = ()=>{ setCountValue(inp.dataset.c, inp.dataset.k, inp.value); render(); };
+    inp.onkeydown = ev=>{ if(ev.key==='Enter'){ ev.preventDefault(); const all = [...document.querySelectorAll('.cnt-in')]; const i = all.indexOf(inp); const nextK = all[i+1] && all[i+1].dataset.k; setCountValue(inp.dataset.c, inp.dataset.k, inp.value); render(); if(nextK){ const n = document.querySelector(`.cnt-in[data-k="${CSS.escape(nextK)}"]`); if(n){ n.focus(); n.select(); } } } };
+  });
+}
+// stock-item modal: typing / picking a catalog code fills the other fields
+function fillPartFromCatalog(){
+  const el = document.getElementById('p_code'); if(!el) return;
+  const it = catByCode(el.value); if(!it) return;
+  const set = (id, v)=>{ const x = document.getElementById(id); if(x && v!==undefined && v!==null && v!=='') x.value = v; };
+  const b = document.getElementById('p_brand');
+  if(b && it.brand){ if(![...b.options].some(o=>o.value===it.brand)) b.add(new Option(it.brand, it.brand)); b.value = it.brand; fillPartModelOptions(''); }
+  const m = document.getElementById('p_model');
+  if(m && it.model){ if(![...m.options].some(o=>o.value===it.model)) m.add(new Option(it.model, it.model)); m.value = it.model; }
+  const t = document.getElementById('p_type');
+  if(t && it.partType){ if(![...t.options].some(o=>o.value===it.partType)) t.add(new Option(it.partType, it.partType)); t.value = it.partType; }
+  set('p_name', [it.partType||it.nameEn||it.nameAr, it.brand, it.model].filter(Boolean).join(' '));
+  if(it.price) set('p_sell', money(it.price));
+}
+function catalogCodeDatalist(){
+  return `<datalist id="catCodeList">${(state.partsCatalog||[]).map(c=>`<option value="${invAttr(c.code)}">${invAttr([c.brand,c.model,c.nameEn||c.nameAr].filter(Boolean).join(' · '))}</option>`).join('')}</datalist>`;
+}
+Object.assign(STR.ar, {auditActionCatalog:'الأصناف', auditActionCount:'الجرد'});
+Object.assign(STR.en, {auditActionCatalog:'Items catalog', auditActionCount:'Stock count'});
+Object.assign(AUDIT_ACTION_LABELS, {catalog_add:'auditActionCatalog', catalog_edit:'auditActionCatalog', catalog_delete:'auditActionCatalog', catalog_import:'auditActionCatalog', stock_count:'auditActionCount'});
+ICONS.items = '<path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="2"/>';
+ICONS.count = '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3v3h6V3"/><path d="m9 13 2 2 4-4"/>';
 
 loadAll();
 </script>
