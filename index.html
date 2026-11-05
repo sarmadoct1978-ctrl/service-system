@@ -545,6 +545,7 @@ details.hist table{margin-top:6px;}
 /* save / cancel always visible at the bottom of the job form */
 .modal.modal-wide .modal-actions{position:sticky;bottom:0;z-index:5;background:#fff;margin:6px -22px 0;padding:10px 22px 12px;border-top:1px solid var(--line,#e5e7eb);box-shadow:0 -6px 14px rgba(20,33,61,.06);}
 .kpi-link{cursor:pointer;transition:transform .12s, box-shadow .12s;}
+.kpi-link.kpi-active{outline:2px solid var(--violet,#6366f1);outline-offset:2px;}
 .kpi-link:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(20,33,61,.10);}
 #f_techNote{width:100%;min-height:44px;resize:vertical;font-family:inherit;}
 #f_techNote.need{border-color:#f59e0b;background:#fffbeb;}
@@ -1603,8 +1604,8 @@ function isSwapRepair(r){ return (r.serviceType||SERVICE_TYPES[0])===SERVICE_TYP
 function swapStatusBadge(r){ return `<span class="status-badge status-${r.status===CANCELLED_STATUS?8:STATUSES.indexOf(r.status)+1}">${DL(r.status)}</span>`; }
 function filteredSwaps(){
   let list = visibleRepairs().filter(isSwapRepair).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
-  if(swapFilter==='pending') list = list.filter(r=>!r.newImei && r.status!==CANCELLED_STATUS);
-  if(swapFilter==='done') list = list.filter(r=>!!r.newImei);
+  if(swapFilter==='pending') list = list.filter(swapIsPending);
+  if(swapFilter==='done') list = list.filter(swapIsDone);
   if(swapFilter==='voc') list = list.filter(r=>isVoc(r));
   if(swapFilter==='voc_pending') list = list.filter(r=>swapNeedsApproval(r) && (r.vocStatus||'pending')==='pending');
   if(swapFilter==='defect') list = list.filter(r=>r.swapKind==='defect');
@@ -1614,6 +1615,15 @@ function filteredSwaps(){
   }
   return list;
 }
+// a swap delivered before today without a new IMEI recorded (older jobs) counts as finished, not as waiting
+function swapDeliveredOld(r){
+  if(r.newImei || r.status!=='تم التسليم') return false;
+  const d = localDayStr(r.deliveredAt || r.updatedAt || r.createdAt);
+  return !!d && d < todayISO();
+}
+function swapIsDone(r){ return !!r.newImei || swapDeliveredOld(r); }
+function swapIsPending(r){ return !r.newImei && r.status!==CANCELLED_STATUS && !swapDeliveredOld(r); }
+function swapKpi(f){ swapFilter = f; selectedSwapId = null; render(); const t = document.querySelector('#pageContent .toolbar'); if(t) t.scrollIntoView({behavior:'smooth', block:'start'}); }
 function selectSwap(id){ selectedSwapId = selectedSwapId===id ? null : id; render(); const d = document.querySelector('.swap-detail'); if(d && selectedSwapId) d.scrollIntoView({behavior:'smooth', block:'start'}); }
 function openNewSwap(){
   openRepairModal();
@@ -1625,14 +1635,14 @@ function renderSwaps(){
   const list = filteredSwaps();
   if(!list.find(r=>r.id===selectedSwapId)) selectedSwapId = list.length ? list[0].id : null;
   const sel = list.find(r=>r.id===selectedSwapId);
-  const doneCount = all.filter(r=>!!r.newImei).length;
-  const pendingCount = all.filter(r=>!r.newImei && r.status!==CANCELLED_STATUS).length;
+  const doneCount = all.filter(swapIsDone).length;
+  const pendingCount = all.filter(swapIsPending).length;
   return `
     <div class="grid-auto">
-      <div class="kpi tint-pink"><div class="kpi-top"><p class="kpi-label">${T('swapTotal')}</p><div class="kpi-icon pink">${icon('swap')}</div></div><p class="kpi-value">${all.length}</p></div>
-      <div class="kpi tint-green"><div class="kpi-top"><p class="kpi-label">${T('swapDone')}</p><div class="kpi-icon green">${icon('check')}</div></div><p class="kpi-value">${doneCount}</p></div>
-      <div class="kpi ${pendingCount?'tint-red':'tint-blue'}"><div class="kpi-top"><p class="kpi-label">${T('swapPending')}</p><div class="kpi-icon ${pendingCount?'red':'blue'}">${icon('history')}</div></div><p class="kpi-value">${pendingCount}</p></div>
-      <div class="kpi ${pendingVocCount()?'tint-amber':'tint-blue'}"><div class="kpi-top"><p class="kpi-label">${TT('SWAP بانتظار موافقة المدير','SWAPs awaiting admin approval')}</p><div class="kpi-icon ${pendingVocCount()?'amber':'blue'}">${icon('check')}</div></div><p class="kpi-value">${pendingVocCount()}</p></div>
+      <div class="kpi tint-pink kpi-link ${swapFilter===''?'kpi-active':''}" onclick="swapKpi('')"><div class="kpi-top"><p class="kpi-label">${T('swapTotal')}</p><div class="kpi-icon pink">${icon('swap')}</div></div><p class="kpi-value">${all.length}</p></div>
+      <div class="kpi tint-green kpi-link ${swapFilter==='done'?'kpi-active':''}" onclick="swapKpi('done')"><div class="kpi-top"><p class="kpi-label">${T('swapDone')}</p><div class="kpi-icon green">${icon('check')}</div></div><p class="kpi-value">${doneCount}</p></div>
+      <div class="kpi ${pendingCount?'tint-red':'tint-blue'} kpi-link ${swapFilter==='pending'?'kpi-active':''}" onclick="swapKpi('pending')"><div class="kpi-top"><p class="kpi-label">${T('swapPending')}</p><div class="kpi-icon ${pendingCount?'red':'blue'}">${icon('history')}</div></div><p class="kpi-value">${pendingCount}</p></div>
+      <div class="kpi ${pendingVocCount()?'tint-amber':'tint-blue'} kpi-link ${swapFilter==='voc_pending'?'kpi-active':''}" onclick="swapKpi('voc_pending')"><div class="kpi-top"><p class="kpi-label">${TT('SWAP بانتظار موافقة المدير','SWAPs awaiting admin approval')}</p><div class="kpi-icon ${pendingVocCount()?'amber':'blue'}">${icon('check')}</div></div><p class="kpi-value">${pendingVocCount()}</p></div>
     </div>
     <p style="font-size:12px;color:var(--muted);margin:-6px 0 12px;">${TT(`الاستبدال خلال أول ${SWAP_DEFECT_DAYS} أيام من تفعيل الجهاز يعتبر عيب مصنعي. بعدها يعتبر VOC ويحتاج موافقة خاصة من المدير.`, `A swap within the first ${SWAP_DEFECT_DAYS} days of activation is a manufacturing defect. After that it is a VOC exception that needs special admin approval.`)}</p>
     <div class="toolbar">
@@ -1659,7 +1669,7 @@ function renderSwaps(){
                 <td class="mono" style="font-size:12px;">${r.jobNo||'-'}</td>
                 <td>${deviceLabel(r)}<div style="font-size:12px;color:var(--muted);">${r.customerName}${r.agentName?` · ${agentLine(r)}`:''}</div>${(r.swapKind||r.notActive)?`<div style="margin-top:4px;">${notActiveBadge(r)}${swapKindBadge(r)}</div>`:''}</td>
                 <td class="mono" style="font-size:12.5px;">${r.imei||'-'}</td>
-                <td class="mono" style="font-size:12.5px;">${r.newImei?r.newImei:`<span class="swap-pending">${T('swapNotYet')}</span>`}</td>
+                <td class="mono" style="font-size:12.5px;">${r.newImei?r.newImei:swapDeliveredOld(r)?`<span style="color:var(--muted);font-size:12px;">${TT('مُسلَّم','Delivered')}</span>`:`<span class="swap-pending">${T('swapNotYet')}</span>`}</td>
                 <td>${swapStatusBadge(r)}</td>
                 ${authRole==='admin'?`<td onclick="event.stopPropagation()" style="white-space:nowrap;">${vocActionButtons(r) || (swapNeedsApproval(r) ? swapKindBadge(r) : '<span style="color:var(--muted);font-size:12px;">—</span>')}</td>`:''}
               </tr>`).join('')}
