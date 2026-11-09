@@ -5492,6 +5492,7 @@ function renderInventory(){
       <button class="btn" onclick="exportInventoryExcel()">${icon('receipt')} ${T('exportExcel')}</button>
       ${authRole!=='branch' ? `<button class="btn" onclick="invForecastOpen=true;render();">${icon('reports')} ${TT('توقع طلب القطع','Parts forecast')}</button>` : ''}
       ${authRole==='branch' ? `<button class="btn" onclick="setPage('transfers')">${icon('transfer')} ${T('requestFromMainBtn')}</button>` : ''}
+      ${authRole==='admin'?`<button class="btn" style="border-color:var(--red);color:var(--red);" onclick="resetInventoryQty()">${icon('del')} ${TT('تصفير الكميات','Reset quantities')}</button>`:''}
       ${manage?`<button class="btn btn-primary" onclick="openPartModal()">${icon('plus')} ${T('addPart')}</button>`:''}
     </div>
     ${authRole==='branch'?`<p style="font-size:12px;color:var(--muted);margin:-6px 0 12px;">${TT('كميات الفرع تتغير بس عن طريق الجوبات واستلام التحويلات. لتصحيح كمية تواصل ويه المدير أو المخزن الرئيسي.','Branch quantities change only through jobs and received transfers. To correct a quantity, contact the admin or the main warehouse.')}</p>`:''}
@@ -5528,8 +5529,31 @@ function renderInventory(){
 const MOVE_LABELS = {
   legacy:['استخدام قديم بجوب','Legacy job use'], job_use:['صرف لجوب','Used in job'], job_return:['رجوع من جوب','Returned from job'],
   transfer_out:['تحويل صادر','Transfer out'], transfer_in:['تحويل وارد','Transfer in'], issue:['صرف','Issued'], adjust:['تعديل يدوي','Manual adjust'],
-  count:['جرد / تصحيح','Count correction'], add:['إضافة','Added'], import:['استيراد إكسل','Excel import'], defective_in:['جهاز عاطل (SWAP)','Defective in (SWAP)'], defective_out:['إلغاء جهاز عاطل','Defective removed']
+  count:['جرد / تصحيح','Count correction'], reset:['تصفير الكميات (المدير)','Quantities reset (admin)'], add:['إضافة','Added'], import:['استيراد إكسل','Excel import'], defective_in:['جهاز عاطل (SWAP)','Defective in (SWAP)'], defective_out:['إلغاء جهاز عاطل','Defective removed']
 };
+// Admin only: sets every spare-part quantity at the selected location to zero.
+// Each change is written as a stock movement ('reset') so the history stays complete.
+function resetInventoryQty(){
+  if(authRole!=='admin'){ alert(T('alertNoPermission')); return; }
+  const loc = state.currentBranch;
+  const locName = loc==='all' ? TT('كل الفروع والمخزن الرئيسي','all branches and the main warehouse') : (loc===MAIN_WH_ID ? T('mainWarehouse') : branchName(loc));
+  const items = visibleInventory().filter(p=>!p.defective && (Number(p.qty)||0)!==0);
+  if(!items.length){ alert(TT('ماكو قطع بيها كمية بهذا المكان.','No parts with a quantity at this location.')); return; }
+  const total = items.reduce((a,p)=>a+(Number(p.qty)||0),0);
+  const word = TT('تصفير','RESET');
+  const ans = prompt(TT(
+    `راح تتصفر كميات ${items.length} صنف (المجموع ${total} قطعة) في: ${locName}.\nالأجهزة العاطلة (SWAP) ما تتأثر، وكل تغيير ينحفظ بسجل حركة القطعة.\nهذا الإجراء ما يترجع تلقائياً.\n\nللتأكيد اكتب كلمة: ${word}`,
+    `This sets the quantity of ${items.length} items (${total} pcs in total) at ${locName} to zero.\nDefective (SWAP) devices are not affected; every change is kept in the item movement history.\nThis cannot be undone automatically.\n\nType ${word} to confirm:`));
+  if(ans===null) return;
+  if(ans.trim()!==word){ alert(TT('ما تم التصفير: كلمة التأكيد غير صحيحة.','Not reset: confirmation word did not match.')); return; }
+  const ref = 'reset:'+new Date().toISOString();
+  let n = 0;
+  items.forEach(p=>{ if(addMove(p.id, -(Number(p.qty)||0), 'reset', ref)) n++; });
+  saveInventory(); if(typeof saveStockMoves==='function') saveStockMoves();
+  logAudit('stock_reset', authRole, currentActorName(), `${TT('تصفير الكميات','Quantities reset')}: ${locName} — ${n} ${TT('صنف','items')} / ${total}`);
+  alert(TT(`تم تصفير ${n} صنف.`, `${n} items reset to zero.`));
+  render();
+}
 function openStockHistory(invId){
   const p = state.inventory.find(x=>x.id===invId); if(!p) return;
   const moves = state.stockMoves.filter(m=>m.invId===invId).sort((a,b)=>String(b.ts).localeCompare(String(a.ts))).slice(0,200);
@@ -7724,6 +7748,9 @@ function catalogCodeDatalist(){
 }
 Object.assign(STR.ar, {auditActionCatalog:'الأصناف', auditActionCount:'الجرد'});
 Object.assign(STR.en, {auditActionCatalog:'Items catalog', auditActionCount:'Stock count'});
+Object.assign(AUDIT_ACTION_LABELS, {stock_reset:'auditActionStockReset'});
+Object.assign(STR.ar, {auditActionStockReset:'تصفير كميات المخزون'});
+Object.assign(STR.en, {auditActionStockReset:'Stock quantities reset'});
 Object.assign(AUDIT_ACTION_LABELS, {catalog_add:'auditActionCatalog', catalog_edit:'auditActionCatalog', catalog_delete:'auditActionCatalog', catalog_import:'auditActionCatalog', stock_count:'auditActionCount'});
 ICONS.items = '<path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="2"/>';
 ICONS.count = '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3v3h6V3"/><path d="m9 13 2 2 4-4"/>';
