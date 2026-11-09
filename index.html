@@ -1346,7 +1346,7 @@ function renderInner(){
   root.className = '';
 
   const authed = authRole==='admin' || authRole==='branch' || authRole==='warehouse';
-  if(authRole==='warehouse' && !['inventory','transfers','items','stockcount'].includes(state.page)) state.page = 'inventory';
+  if(authRole==='warehouse' && !['inventory','transfers','items','stockcount','swaps','reports'].includes(state.page)) state.page = 'inventory';
   const sidebarEl = document.getElementById('sidebarEl');
   if(sidebarEl) sidebarEl.style.display = authed ? 'flex' : 'none';
 
@@ -1373,6 +1373,8 @@ function renderInner(){
       navBtn('items',TT('الأصناف','Items'),'items'),
       navBtn('stockcount',TT('الجرد','Stock count'),'count',(state.stockCounts||[]).filter(c=>c.status==='submitted').length),
       navBtn('transfers',T('navTransfers'),'transfer',pendingIncomingTransfers),
+      navBtn('swaps',T('navSwaps'),'swap',pendingSwaps),
+      navBtn('reports',T('navReports'),'reports'),
     ].join('');
   }else if(authRole==='admin'){
     navList.innerHTML = [
@@ -1432,7 +1434,7 @@ function renderInner(){
     claims:[TT('مطالبات الضمان','Warranty claims'),TT('كلفة الصيانة داخل الضمان اللي تنطالب بيها الشركة أو الموزع','In-warranty repair costs to claim from the brand or distributor')],
   };
   if(!titles[state.page] || (state.page==='claims' && authRole!=='admin')) state.page = authRole==='warehouse' ? 'inventory' : 'dashboard';
-  if(authRole==='admin' && state.currentBranch===MAIN_WH_ID && !['inventory','transfers','items','stockcount'].includes(state.page)) state.currentBranch = 'all';
+  if((authRole==='admin' || authRole==='warehouse') && state.currentBranch===MAIN_WH_ID && !['inventory','transfers','items','stockcount'].includes(state.page)) state.currentBranch = 'all';
   const [pageTitle,pageSub] = titles[state.page];
   const dateStr = new Date().toLocaleDateString(lang==='ar'?'ar-IQ':'en-GB',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
 
@@ -1443,7 +1445,7 @@ function renderInner(){
         ${(authRole==='admin' || authRole==='warehouse') && state.page!=='branches' ? `
         <select class="branch-select" id="branchSelect" title="${T('branchLabel')}">
           <option value="all" ${state.currentBranch==='all'?'selected':''}>${T('allBranches')}</option>
-          ${(authRole==='warehouse' || ['inventory','transfers','items','stockcount'].includes(state.page)) ? `<option value="${MAIN_WH_ID}" ${state.currentBranch===MAIN_WH_ID?'selected':''}>${T('mainWarehouse')}</option>` : ''}
+          ${['inventory','transfers','items','stockcount'].includes(state.page) ? `<option value="${MAIN_WH_ID}" ${state.currentBranch===MAIN_WH_ID?'selected':''}>${T('mainWarehouse')}</option>` : ''}
           ${state.branches.map(b=>`<option value="${b.id}" ${state.currentBranch===b.id?'selected':''}>${b.name}</option>`).join('')}
         </select>
         ` : `<span class="branch-chip">${icon('branch')} ${authRole==='admin'?T('adminModeLabel'):branchName(state.authBranchId)}</span>`}
@@ -1626,6 +1628,7 @@ function swapIsPending(r){ return !r.newImei && r.status!==CANCELLED_STATUS && !
 function swapKpi(f){ swapFilter = f; selectedSwapId = null; render(); const t = document.querySelector('#pageContent .toolbar'); if(t) t.scrollIntoView({behavior:'smooth', block:'start'}); }
 function selectSwap(id){ selectedSwapId = selectedSwapId===id ? null : id; render(); const d = document.querySelector('.swap-detail'); if(d && selectedSwapId) d.scrollIntoView({behavior:'smooth', block:'start'}); }
 function openNewSwap(){
+  if(authRole==='warehouse'){ alert(T('alertNoPermission')); return; }
   openRepairModal();
   const st = document.getElementById('f_serviceType');
   if(st){ st.value = SERVICE_TYPES[1]; toggleSwapFields(); }
@@ -1656,7 +1659,7 @@ function renderSwaps(){
         <option value="defect" ${swapFilter==='defect'?'selected':''}>${TT('عيب مصنعي','Manufacturing defect')}</option>
       </select>
       <button class="btn" onclick="exportSwapsExcel()">${icon('receipt')} ${T('exportExcel')}</button>
-      <button class="btn btn-primary" onclick="openNewSwap()">${icon('plus')} ${T('newSwapBtn')}</button>
+      ${authRole==='warehouse' ? '' : `<button class="btn btn-primary" onclick="openNewSwap()">${icon('plus')} ${T('newSwapBtn')}</button>`}
     </div>
     ${list.length ? `
     <div class="swap-layout">
@@ -1719,7 +1722,7 @@ function renderSwapDetail(r){
     </div>`:''}
     <div class="ticket-actions" style="margin-top:16px;">
       ${vocActionButtons(r)}
-      <button class="btn btn-sm btn-primary" onclick="openRepairModal('${r.id}')">${icon('edit')} ${r.newImei?T('edit'):T('enterNewImeiBtn')}</button>
+      ${authRole==='warehouse' ? '' : `<button class="btn btn-sm btn-primary" onclick="openRepairModal('${r.id}')">${icon('edit')} ${r.newImei?T('edit'):T('enterNewImeiBtn')}</button>`}
       <button class="btn btn-sm" onclick="printReceipt('${r.id}')">${icon('print')} ${T('printReceiptBtn')}</button>
     </div>
   `;
@@ -2400,6 +2403,7 @@ function generateInvoicesFromReport(){
 /* ---------------- PROFIT REPORT & BACKUP ---------------- */
 
 async function exportFullBackup(){
+  if(authRole==='warehouse'){ alert(T('alertNoPermission')); return; }
   const backup = {
     exportedAt: new Date().toISOString(),
     repairs: state.repairs,
@@ -2477,8 +2481,8 @@ function renderReports(){
     <div class="toolbar">
       <div style="flex:1;"></div>
       <input type="file" id="importReportsInput" accept=".xlsx,.xls" style="display:none" onchange="handleImportDevicesExcel(event)">
-      <button class="btn" onclick="document.getElementById('importReportsInput').click()">${icon('receipt')} ${T('importExcel')}</button>
-      <button class="btn" onclick="exportFullBackup()">${icon('receipt')} ${T('exportBackup')}</button>
+      ${authRole==='warehouse' ? '' : `<button class="btn" onclick="document.getElementById('importReportsInput').click()">${icon('receipt')} ${T('importExcel')}</button>
+      <button class="btn" onclick="exportFullBackup()">${icon('receipt')} ${T('exportBackup')}</button>`}
       <button class="btn btn-primary" onclick="exportReportsExcel()">${icon('receipt')} ${T('exportExcel')}</button>
     </div>
     <div class="grid-auto">
@@ -2584,6 +2588,7 @@ function canonicalizeValue(val, list){
 }
 
 function handleImportDevicesExcel(evt){
+  if(authRole==='warehouse'){ alert(T('alertNoPermission')); return; }
   const file = evt.target.files[0];
   if(!file) return;
   if(typeof XLSX === 'undefined'){ alert(lang==='ar'?'تعذّر تحميل مكتبة الاستيراد، تحقق من الاتصال بالإنترنت.':'Could not load the import library, check your internet connection.'); evt.target.value=''; return; }
@@ -4289,7 +4294,7 @@ async function loadAll(){
   await restoreSession();
   if(authRole==='branch' && !state.branches.find(b=>b.id===state.authBranchId)){ authRole = null; state.authBranchId = null; }
   state.currentBranch = authRole==='branch' ? state.authBranchId : (authRole==='warehouse' ? MAIN_WH_ID : 'all');
-  if(authRole==='warehouse' && !['inventory','transfers','items','stockcount'].includes(state.page)) state.page = 'inventory';
+  if(authRole==='warehouse' && !['inventory','transfers','items','stockcount','swaps','reports'].includes(state.page)) state.page = 'inventory';
   if(needsBranchSave) saveBranches();
   if(needsRepairSave) saveRepairs();
   { let catChanged = false; state.repairs.forEach(r=>{ if(r.deviceBrand && ensureCatalogModel(r.deviceBrand, r.deviceModel)) catChanged = true; }); if(catChanged) saveDeviceCatalog(); }
@@ -4937,6 +4942,7 @@ function swapInvOptionsHtml(branchId, current){
   return `<option value="">${TT('— بدون (الجهاز البديل مو من المخزن) —','— None (replacement not from stock) —')}</option>` + inv.map(p=>`<option value="${p.id}" ${p.id===current?'selected':''}>${p.name} (${p.code}) — ${T('available')}: ${p.qty}</option>`).join('');
 }
 function openRepairModal(id){
+  if(authRole==='warehouse'){ alert(T('alertNoPermission')); return; }
   modalPendingPartReq = null;
   modalOpenedAt = new Date().toISOString();
   const editing = id ? state.repairs.find(r=>r.id===id) : null;
