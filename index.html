@@ -5529,7 +5529,7 @@ function renderInventory(){
 const MOVE_LABELS = {
   legacy:['استخدام قديم بجوب','Legacy job use'], job_use:['صرف لجوب','Used in job'], job_return:['رجوع من جوب','Returned from job'],
   transfer_out:['تحويل صادر','Transfer out'], transfer_in:['تحويل وارد','Transfer in'], issue:['صرف','Issued'], adjust:['تعديل يدوي','Manual adjust'],
-  count:['جرد / تصحيح','Count correction'], reset:['تصفير الكميات (المدير)','Quantities reset (admin)'], add:['إضافة','Added'], import:['استيراد إكسل','Excel import'], defective_in:['جهاز عاطل (SWAP)','Defective in (SWAP)'], defective_out:['إلغاء جهاز عاطل','Defective removed']
+  count:['جرد / تصحيح','Count correction'], count_edit:['تعديل جرد معتمد','Approved count edited'], reset:['تصفير الكميات (المدير)','Quantities reset (admin)'], add:['إضافة','Added'], import:['استيراد إكسل','Excel import'], defective_in:['جهاز عاطل (SWAP)','Defective in (SWAP)'], defective_out:['إلغاء جهاز عاطل','Defective removed']
 };
 // Admin only: sets every spare-part quantity at the selected location to zero.
 // Each change is written as a stock movement ('reset') so the history stays complete.
@@ -7068,6 +7068,7 @@ function partReqReceiveBtn(r){
    ===================================================================== */
 let itemSearch = '', itemBrandFilter = '', itemTypeFilter = '';
 let countOpenId = null, countSearch = '', countBrandFilter = '', countDiffOnly = false, countHideZero = false;
+let countEditId = null, countEdits = {}; // editing an approved (posted) count
 
 function normCode(c){ return String(c||'').trim().toUpperCase().replace(/\s+/g,''); }
 function canEditCatalog(){ return authRole==='admin' || authRole==='warehouse'; }
@@ -7491,6 +7492,7 @@ function renderStockCount(){
     <div class="toolbar">
       <button class="btn btn-primary" onclick="openNewCountModal()">${icon('plus')} ${TT('جرد جديد','New count')}</button>
       ${canPostCount() && waiting ? `<span class="status-badge status-1">${waiting} ${TT('جرد بانتظار اعتمادك','count(s) awaiting your approval')}</span>` : ''}
+      ${authRole==='admin' && list.some(c=>c.pendingEdit) ? `<span class="status-badge status-1">${list.filter(c=>c.pendingEdit).length} ${TT('طلب تعديل جرد بانتظار موافقتك','count edit request(s) awaiting your approval')}</span>` : ''}
     </div>
     <p style="font-size:12.5px;color:var(--muted);margin:-4px 0 12px;line-height:1.8;">${authRole==='branch'
       ? TT('الفرع يعد القطع ويكتب الكمية الفعلية، وبعدها يرسل الجرد. الكميات ما تتغير إلا بعد ما الإدارة أو المخزن الرئيسي يعتمدونه.','The branch counts the parts, enters the real quantities and sends the count. Quantities change only after the admin or the main warehouse approves it.')
@@ -7507,81 +7509,172 @@ function renderStockCount(){
             <td>${invAttr(c.brand||TT('كل الماركات','All brands'))}</td>
             <td class="mono">${fmtDateTime(c.createdAt)}</td>
             <td>${invAttr(c.by||'')}</td>
-            <td>${countStatusBadge(c)}</td>
+            <td>${countStatusBadge(c)}${c.pendingEdit?` <span class="status-badge status-1" style="font-size:10.5px;">${TT('تعديل بانتظار الموافقة','Edit awaiting approval')}</span>`:''}</td>
             <td class="mono">${n}</td>
             <td class="mono" dir="ltr" style="${net<0?'color:var(--red);':''}">${net===null?'-':(net>0?'+':'')+net}</td>
             <td style="white-space:nowrap;"><button class="btn btn-sm" onclick="openCount('${c.id}')">${TT('فتح','Open')}</button>
+              ${(canRequestCountEdit(c) && (!c.pendingEdit || authRole==='admin')) ? `<button class="btn btn-sm" onclick="startEditCount('${c.id}')" title="${TT('تعديل الجرد','Edit count')}">${icon('edit')} ${TT('تعديل','Edit')}</button>` : ''}
               ${(c.status==='draft' && (canPostCount() || c.branchId===state.authBranchId)) ? `<button class="btn btn-sm btn-danger" onclick="deleteCount('${c.id}')">${icon('del')}</button>` : ''}</td>
           </tr>`; }).join('')}</tbody>
       </table>` : emptyState(TT('ماكو جرد بعد','No counts yet'), TT('اضغط «جرد جديد» واختار الفرع.','Press "New count" and choose the location.'))}
     </div>`;
 }
-function openCount(id){ countOpenId = id; countSearch=''; countDiffOnly=false; countBrandFilter=''; render(); }
-function openNewCountModal(){
-  if(!(state.partsCatalog||[]).length && !confirm(TT('ماكو أصناف بالسستم بعد، فالجرد راح يطلع بس القطع الموجودة بمخزن الفرع. تكمل؟','There are no items in the catalog yet, so the count will only list parts already in stock. Continue?'))) return;
-  const locs = authRole==='branch' ? [state.authBranchId] : [MAIN_WH_ID, ...state.branches.map(b=>b.id)];
-  const cur = authRole==='branch' ? state.authBranchId : (state.currentBranch!=='all' ? state.currentBranch : (authRole==='warehouse'?MAIN_WH_ID:state.branches[0]&&state.branches[0].id));
-  const brands = [...new Set([...catBrands(), ...state.inventory.map(p=>p.brand).filter(Boolean)])].sort();
-  showModal(`
-    <h3>${TT('جرد جديد','New stock count')}</h3>
-    <div class="form-row"><label>${T('branchLabel')}</label><select id="sc_branch" ${authRole==='branch'?'disabled':''}>${locs.map(l=>`<option value="${l}" ${l===cur?'selected':''}>${locName(l)}</option>`).join('')}</select></div>
-    <div class="form-row"><label>${T('colBrand')}</label><select id="sc_brand"><option value="">${TT('كل الماركات','All brands')}</option>${brands.map(b=>`<option>${invAttr(b)}</option>`).join('')}</select></div>
-    <div class="form-row"><label>${TT('ملاحظة','Note')}</label><input id="sc_note" placeholder="${TT('مثلاً: جرد نهاية الشهر','e.g. month-end count')}"></div>
-    <div class="modal-actions">
-      <button class="btn btn-primary" onclick="createCount()">${TT('ابدأ الجرد','Start count')}</button>
-      <button class="btn" onclick="closeModal()">${T('cancel')}</button>
-    </div>`);
+function openCount(id){ countOpenId = id; countEditId = null; countEdits = {}; countSearch=''; countDiffOnly=false; countBrandFilter=''; render(); }
+// Editing an approved count: anyone who can see the count may request an edit; the admin approves it.
+function canRequestCountEdit(c){
+  if(!c || c.status!=='posted') return false;
+  if(authRole==='admin' || authRole==='warehouse') return true;
+  return authRole==='branch' && c.branchId===state.authBranchId;
 }
-function createCount(){
-  const branchId = authRole==='branch' ? state.authBranchId : document.getElementById('sc_branch').value;
-  const brand = document.getElementById('sc_brand').value;
-  const open = (state.stockCounts||[]).find(c=>c.branchId===branchId && (c.status==='draft'||c.status==='submitted') && (c.brand||'')===brand);
-  if(open){ closeModal(); alert(TT('أكو جرد مفتوح لنفس الفرع والماركة، فتحتلك ياه.','There is already an open count for this location and brand. It has been opened.')); openCount(open.id); return; }
-  const d = new Date(); const seq = (state.stockCounts||[]).filter(c=>c.branchId===branchId).length + 1;
-  const code = branchId===MAIN_WH_ID ? 'WH' : (branchCode(branchId)||'BR');
-  const c = {id:uid(), no:`CNT-${code}-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}-${seq}`, branchId, brand, note:document.getElementById('sc_note').value.trim(),
-    status:'draft', createdAt:d.toISOString(), by:currentActorName(), counts:{}};
-  state.stockCounts.push(c);
-  logAudit('stock_count', authRole, currentActorName(), `${TT('بدء جرد','Count started')}: ${c.no} (${locName(branchId)})`);
-  saveCounts(); closeModal(); openCount(c.id);
+function startEditCount(id){
+  const c = (state.stockCounts||[]).find(x=>x.id===id);
+  if(!canRequestCountEdit(c)) return;
+  if(c.pendingEdit && authRole!=='admin'){ alert(TT('أكو طلب تعديل على هذا الجرد بانتظار موافقة المدير.','An edit request for this count is already awaiting admin approval.')); openCount(id); return; }
+  countOpenId = id; countEditId = id; countEdits = {}; countSearch=''; countDiffOnly=false; countBrandFilter=''; render();
 }
-function deleteCount(id){
-  const c = state.stockCounts.find(x=>x.id===id); if(!c || c.status!=='draft') return;
-  if(!confirm(TT(`تحذف الجرد ${c.no}؟`, `Delete count ${c.no}?`))) return;
-  state.stockCounts.splice(state.stockCounts.indexOf(c),1); addDeletion('stockCounts', id);
-  if(countOpenId===id) countOpenId = null;
+function cancelEditCount(){
+  if(Object.keys(countEdits).length && !confirm(TT('تلغي التعديلات اللي سويتها؟','Discard your changes?'))) return;
+  countEditId = null; countEdits = {}; render();
+}
+// the stock row a count correction lands on (created if the location has none for this item)
+function countRowFor(c, l){
+  let row = l.rows && l.rows[0];
+  if(!row){
+    const it = l.cat || {};
+    const firstModel = String(it.model||'').split('/')[0].trim();
+    row = newStockItem({branchId:c.branchId, code:it.code||l.code, name:[it.partType||it.nameEn||it.nameAr, it.brand, it.model].filter(Boolean).join(' ')||l.name||l.code, brand:it.brand||l.brand||'', partType:it.partType||'', model:String(it.model||'').includes('/') ? it.model : (firstModel||l.model||''), threshold:2, costPrice:0, sellPrice:Number(it.price)||0}, 0, 'count');
+  }
+  return row;
+}
+// Works out what an edit to an approved count changes. Only the change from the approved number
+// is posted to stock, so sales and transfers made after the count are not touched.
+function planCountEdit(c, edits){
+  recomputeQty();
+  const live = new Map(countLines(c).map(l=>[l.key, l]));
+  const byKey = new Map((c.result||[]).map(r=>[r.key, r]));
+  const plan = [];
+  for(const [key, raw] of Object.entries(edits||{})){
+    if(raw==='' || raw===null || raw===undefined) continue;
+    const n = Math.max(0, Math.floor(Number(raw)||0));
+    const r = byKey.get(key);
+    if(r){ const delta = n - (Number(r.counted)||0); if(delta) plan.push({key, n, delta, r, from:Number(r.counted)||0}); }
+    else{ const l = live.get(key); if(!l) continue; plan.push({key, n, delta:n-(Number(l.sys)||0), l, from:null}); }
+  }
+  const plus = plan.reduce((s,p)=>s+Math.max(0,p.delta),0), minus = plan.reduce((s,p)=>s+Math.min(0,p.delta),0);
+  return {plan, plus, minus, live};
+}
+function applyCountEdit(c, edits, requestedBy){
+  const {plan, plus, minus, live} = planCountEdit(c, edits);
+  if(!plan.length) return null;
+  const result = (c.result||[]).map(r=>({...r}));
+  const byKey = new Map(result.map(r=>[r.key, r]));
+  const ref = `${c.no} · ${TT('تعديل','edit')}`;
+  for(const p of plan){
+    if(p.r){
+      const r = byKey.get(p.key);
+      const l = live.get(p.key) || {key:p.key, code:r.code, brand:r.brand, model:r.model, name:r.name, rows:[], cat:catByCode(r.code)};
+      if(p.delta) addMove(countRowFor(c, l).id, p.delta, 'count_edit', ref);
+      r.counted = p.n; r.diff = p.n - (Number(r.sys)||0);
+    }else{
+      const l = p.l;
+      if(p.delta) addMove(countRowFor(c, l).id, p.delta, 'count_edit', ref);
+      result.push({key:l.key, code:l.code, brand:l.brand, model:l.model, name:l.name, nameAr:l.nameAr||'', sys:l.sys, counted:p.n, diff:p.delta, added:true});
+    }
+  }
+  const now = new Date().toISOString();
+  Object.assign(c, {result, editedAt:now, editedBy:requestedBy||currentActorName(), edits:(c.edits||[]).concat({at:now, by:requestedBy||currentActorName(), approvedBy:currentActorName(), items:plan.length, plus, minus})});
+  delete c.pendingEdit;
+  logAudit('stock_count', authRole, currentActorName(), `${TT('تعديل جرد معتمد','Approved count edited')}: ${c.no} (${locName(c.branchId)}) · ${plan.length} ${TT('صنف','items')} · +${plus} / ${minus}${requestedBy&&requestedBy!==currentActorName()?` · ${TT('طلب','requested by')} ${requestedBy}`:''}`);
+  saveStockMoves(); saveInventory(); saveCounts();
+  return {plan, plus, minus};
+}
+function saveCountEdit(id){
+  const c = (state.stockCounts||[]).find(x=>x.id===id);
+  if(!canRequestCountEdit(c) || countEditId!==id) return;
+  const {plan, plus, minus} = planCountEdit(c, countEdits);
+  if(!plan.length){ alert(TT('ما صار أي تغيير على الكميات.','No quantities were changed.')); return; }
+  if(authRole==='admin'){
+    if(!confirm(TT(`تعديل الجرد ${c.no}\n${plan.length} صنف · زيادة +${plus} · نقص ${minus}\nالمخزون راح يتصحح بالفرق بين الرقم الجديد والرقم المعتمد. تكمل؟`,
+                   `Edit count ${c.no}\n${plan.length} item(s) · +${plus} / ${minus}\nStock will be corrected by the difference from the approved number. Continue?`))) return;
+    applyCountEdit(c, countEdits);
+  }else{
+    if(!confirm(TT(`طلب تعديل الجرد ${c.no}\n${plan.length} صنف · زيادة +${plus} · نقص ${minus}\nالطلب يروح للمدير، والمخزون ما يتغير إلا بعد موافقته. ترسل الطلب؟`,
+                   `Request an edit to count ${c.no}\n${plan.length} item(s) · +${plus} / ${minus}\nThe request goes to the admin; stock changes only after approval. Send it?`))) return;
+    const req = {}; for(const p of plan) req[p.key] = p.n;
+    c.pendingEdit = {id:uid(), counts:req, by:currentActorName(), role:authRole, at:new Date().toISOString(), items:plan.length, plus, minus};
+    logAudit('stock_count', authRole, currentActorName(), `${TT('طلب تعديل جرد معتمد','Count edit requested')}: ${c.no} (${locName(c.branchId)}) · ${plan.length} ${TT('صنف','items')}`);
+    saveCounts();
+    alert(TT('انرسل طلب التعديل للمدير.','The edit request was sent to the admin.'));
+  }
+  countEditId = null; countEdits = {}; render();
+}
+function approveCountEdit(id){
+  const c = (state.stockCounts||[]).find(x=>x.id===id);
+  if(!c || !c.pendingEdit || authRole!=='admin') return;
+  const pe = c.pendingEdit;
+  const {plan, plus, minus} = planCountEdit(c, pe.counts);
+  if(!plan.length){ if(confirm(TT('الطلب ما بقى بيه أي تغيير. تشيله؟','The request no longer changes anything. Remove it?'))){ delete c.pendingEdit; saveCounts(); render(); } return; }
+  if(!confirm(TT(`موافقة على تعديل الجرد ${c.no} (طلب ${pe.by})\n${plan.length} صنف · زيادة +${plus} · نقص ${minus}\nالمخزون راح يتصحح هسه. تكمل؟`,
+                 `Approve the edit to count ${c.no} (requested by ${pe.by})\n${plan.length} item(s) · +${plus} / ${minus}\nStock will be corrected now. Continue?`))) return;
+  applyCountEdit(c, pe.counts, pe.by);
+  render();
+}
+function rejectCountEdit(id){
+  const c = (state.stockCounts||[]).find(x=>x.id===id);
+  if(!c || !c.pendingEdit || authRole!=='admin') return;
+  const reason = prompt(TT('سبب الرفض (اختياري):','Reason for rejecting (optional):'), '');
+  if(reason===null) return;
+  const pe = c.pendingEdit;
+  c.lastRejectedEdit = {by:pe.by, at:pe.at, rejectedBy:currentActorName(), rejectedAt:new Date().toISOString(), reason:String(reason).trim()};
+  delete c.pendingEdit;
+  logAudit('stock_count', authRole, currentActorName(), `${TT('رفض تعديل جرد','Count edit rejected')}: ${c.no} · ${TT('طلب','requested by')} ${pe.by}${reason?` · ${reason}`:''}`);
   saveCounts(); render();
 }
 function renderCountSheet(c){
   const posted = c.status==='posted';
-  const editable = canEditCount(c);
-  let lines = posted ? (c.result||[]).map(r=>({...r, sys:r.sys})) : countLines(c);
+  const editingPosted = posted && countEditId===c.id && canRequestCountEdit(c);
+  const editable = canEditCount(c) || editingPosted;
+  let base = posted ? (c.result||[]).map(r=>({...r, sys:r.sys})) : countLines(c);
+  if(editingPosted){ const inRes = new Set(base.map(l=>l.key)); base = base.concat(countLines(c).filter(l=>!inRes.has(l.key)).map(l=>({...l, fresh:true}))); }
+  let lines = base;
   const brands = [...new Set(lines.map(l=>l.brand).filter(Boolean))].sort();
   const counts = c.counts||{};
-  const val = l=> posted ? l.counted : counts[l.key];
+  const val = l=> editingPosted ? (countEdits[l.key]!==undefined ? countEdits[l.key] : l.counted) : (posted ? l.counted : counts[l.key]);
   const has = v=> v!=='' && v!==null && v!==undefined;
   if(countBrandFilter) lines = lines.filter(l=>l.brand===countBrandFilter);
   if(countSearch){ const q = countSearch.toLowerCase(); lines = lines.filter(l=>[l.code,l.brand,l.model,l.name,l.nameAr].join(' ').toLowerCase().includes(q)); }
   if(countDiffOnly) lines = lines.filter(l=>has(val(l)) && Number(val(l))!==Number(l.sys));
   if(countHideZero) lines = lines.filter(l=>Number(l.sys)!==0 || has(val(l)));
-  const all = posted ? (c.result||[]) : countLines(c);
-  const done = all.filter(l=>has(posted?l.counted:counts[l.key])).length;
-  const diffs = all.filter(l=>{ const v = posted?l.counted:counts[l.key]; return has(v) && Number(v)!==Number(l.sys); });
-  const plus = diffs.reduce((s,l)=>s+Math.max(0,Number(posted?l.counted:counts[l.key])-Number(l.sys)),0);
-  const minus = diffs.reduce((s,l)=>s+Math.min(0,Number(posted?l.counted:counts[l.key])-Number(l.sys)),0);
+  const all = base;
+  const done = all.filter(l=>has(val(l))).length;
+  const diffs = all.filter(l=>{ const v = val(l); return has(v) && Number(v)!==Number(l.sys); });
+  const plus = diffs.reduce((s,l)=>s+Math.max(0,Number(val(l))-Number(l.sys)),0);
+  const minus = diffs.reduce((s,l)=>s+Math.min(0,Number(val(l))-Number(l.sys)),0);
   const shown = lines.slice(0, 800);
   return `
     <div class="toolbar">
-      <button class="btn" onclick="countOpenId=null;render();">← ${TT('رجوع','Back')}</button>
+      <button class="btn" onclick="if(countEditId && Object.keys(countEdits).length && !confirm(TT('تطلع بدون حفظ التعديلات؟','Leave without saving your changes?'))) return; countOpenId=null; countEditId=null; countEdits={}; render();">← ${TT('رجوع','Back')}</button>
       <b>${invAttr(c.no||'')}</b> · ${locName(c.branchId)} · ${invAttr(c.brand||TT('كل الماركات','All brands'))} ${countStatusBadge(c)}
     </div>
+    ${editingPosted?`<div class="panel" style="padding:10px 14px;margin:0 0 12px;border:1px solid var(--accent, #6366f1);font-size:13px;line-height:1.8;">${TT('وضع تعديل جرد معتمد: غيّر الكمية الفعلية للقطع اللي تريدها واضغط «حفظ التعديل». المخزون يتصحح بس بالفرق بين الرقم الجديد والرقم المعتمد، فالمبيعات والتحويلات اللي صارت بعد الجرد ما تتأثر.','Editing an approved count: change the counted quantity where needed and press "Save changes". Stock is corrected only by the difference from the approved number, so sales and transfers made after the count are not affected.')}${authRole!=='admin'?` <b>${TT('التعديل يحتاج موافقة المدير قبل ما يأثر على المخزون.','The edit needs admin approval before it affects stock.')}</b>`:''}</div>`:''}
+    ${posted && c.pendingEdit && !editingPosted ? (()=>{ const pe = c.pendingEdit; const {plan} = planCountEdit(c, pe.counts);
+      return `<div class="panel" style="padding:12px 14px;margin:0 0 12px;border:1px solid var(--orange, #f59e0b);">
+        <div style="font-size:13.5px;margin-bottom:8px;"><b>${TT('طلب تعديل بانتظار موافقة المدير','Edit request awaiting admin approval')}</b> · ${invAttr(pe.by||'')} · ${fmtDateTime(pe.at)}</div>
+        ${plan.length?`<table><thead><tr><th>${T('colCode')}</th><th>${TT('القطعة','Part')}</th><th>${TT('المعتمد','Approved')}</th><th>${TT('المطلوب','Requested')}</th><th>${TT('التغيير على المخزون','Stock change')}</th></tr></thead><tbody>
+          ${plan.map(p=>{ const x = p.r||p.l; return `<tr><td class="mono">${invAttr(x.code||'')}</td><td>${invAttr(x.name||'')} <bdi style="color:var(--muted);">${invAttr(x.model||'')}</bdi></td><td class="mono">${p.from===null?'-':p.from}</td><td class="mono"><b>${p.n}</b></td><td class="mono" dir="ltr" style="${p.delta<0?'color:var(--red);':p.delta>0?'color:var(--green);':''}font-weight:700;">${p.delta>0?'+':''}${p.delta}</td></tr>`; }).join('')}
+        </tbody></table>`:`<p style="font-size:12.5px;color:var(--muted);">${TT('الطلب ما بقى بيه تغيير.','The request no longer changes anything.')}</p>`}
+        ${authRole==='admin'?`<div class="modal-actions" style="justify-content:flex-start;margin-top:10px;">
+          <button class="btn btn-primary" onclick="approveCountEdit('${c.id}')">${icon('check')} ${TT('موافقة وتصحيح المخزون','Approve & correct stock')}</button>
+          <button class="btn btn-danger" onclick="rejectCountEdit('${c.id}')">${TT('رفض','Reject')}</button></div>`:''}
+      </div>`; })() : ''}
+    ${posted && !c.pendingEdit && c.lastRejectedEdit && !editingPosted ? `<p style="font-size:12.5px;color:var(--red);margin:0 0 10px;">${TT('آخر طلب تعديل انرفض','Last edit request rejected')}: ${invAttr(c.lastRejectedEdit.by||'')} · ${TT('رفضه','by')} ${invAttr(c.lastRejectedEdit.rejectedBy||'')} · ${fmtDateTime(c.lastRejectedEdit.rejectedAt)}${c.lastRejectedEdit.reason?` · ${invAttr(c.lastRejectedEdit.reason)}`:''}</p>`:''}
     <div class="toolbar">
       <input class="search-input" id="countSearch" placeholder="${TT('بحث بالكود أو الموديل أو القطعة','Search code, model or part')}" value="${invAttr(countSearch)}">
       ${brands.length>1?`<select id="countBrandFilter"><option value="">${T('allBrands')}</option>${brands.map(b=>`<option ${countBrandFilter===b?'selected':''}>${invAttr(b)}</option>`).join('')}</select>`:''}
       <label style="display:flex;gap:6px;align-items:center;font-size:13px;"><input type="checkbox" id="countDiffOnly" ${countDiffOnly?'checked':''}> ${TT('بس الفروقات','Differences only')}</label>
       <label style="display:flex;gap:6px;align-items:center;font-size:13px;"><input type="checkbox" id="countHideZero" ${countHideZero?'checked':''}> ${TT('اخفي الأصفار','Hide zero stock')}</label>
       <button class="btn" onclick="exportCountExcel('${c.id}')">${icon('receipt')} ${TT('ورقة الجرد إكسل','Count sheet Excel')}</button>
-      ${editable?`<input type="file" id="importCountInput" accept=".xlsx,.xls" style="display:none" onchange="importCountExcel(event,'${c.id}')">
+      ${canEditCount(c)?`<input type="file" id="importCountInput" accept=".xlsx,.xls" style="display:none" onchange="importCountExcel(event,'${c.id}')">
       <button class="btn" onclick="document.getElementById('importCountInput').click()">${icon('receipt')} ${TT('استيراد الكميات المعدودة','Import counted qty')}</button>
       <button class="btn" onclick="fillCountWithSystem('${c.id}')">${TT('عبّي الفارغ بكمية السستم','Fill blanks with system qty')}</button>`:''}
     </div>
@@ -7598,7 +7691,7 @@ function renderCountSheet(c){
         <tbody>${shown.map(l=>{ const v = val(l); const d = has(v) ? Number(v)-Number(l.sys) : null;
           return `<tr class="${d?'low-stock':''}">
             <td class="mono">${invAttr(l.code)}</td><td>${invAttr(l.brand||'-')}</td><td><bdi>${invAttr(l.model||'-')}</bdi></td>
-            <td>${invAttr(l.name||'')}${l.nameAr&&l.nameAr!==l.name?`<div style="font-size:12px;color:var(--muted);">${invAttr(l.nameAr)}</div>`:''}${l.extra?` <span class="status-badge badge-quote-pending" style="font-size:10px;">${TT('مو بالأصناف','Not in catalog')}</span>`:''}</td>
+            <td>${invAttr(l.name||'')}${l.nameAr&&l.nameAr!==l.name?`<div style="font-size:12px;color:var(--muted);">${invAttr(l.nameAr)}</div>`:''}${l.extra?` <span class="status-badge badge-quote-pending" style="font-size:10px;">${TT('مو بالأصناف','Not in catalog')}</span>`:''}${l.fresh?` <span class="status-badge" style="font-size:10px;">${TT('ما انعدّت بالجرد','Not in the count')}</span>`:''}${l.added?` <span class="status-badge" style="font-size:10px;">${TT('أُضيفت بالتعديل','Added in edit')}</span>`:''}</td>
             <td class="mono">${l.sys}</td>
             <td>${editable?`<input class="cnt-in mono" type="number" min="0" inputmode="numeric" style="width:90px;" data-k="${invAttr(l.key)}" data-c="${c.id}" value="${has(v)?v:''}">`:`<span class="mono">${has(v)?v:'-'}</span>`}</td>
             <td class="mono" dir="ltr" style="${d<0?'color:var(--red);font-weight:700;':d>0?'color:var(--green);font-weight:700;':''}">${d===null?'':(d>0?'+':'')+d}</td>
@@ -7610,11 +7703,21 @@ function renderCountSheet(c){
       ${c.status==='draft' && editable && authRole==='branch' ? `<button class="btn btn-primary" onclick="submitCount('${c.id}')">${icon('check')} ${TT('إرسال الجرد للاعتماد','Send for approval')}</button>` : ''}
       ${!posted && c.status!=='cancelled' && canPostCount() ? `<button class="btn btn-primary" onclick="postCount('${c.id}')">${icon('check')} ${TT('اعتماد الجرد وتصحيح الكميات','Post count & correct stock')}</button>` : ''}
       ${c.status==='submitted' && canPostCount() ? `<button class="btn" onclick="returnCount('${c.id}')">${TT('إرجاع للفرع','Return to branch')}</button>` : ''}
-      ${posted?`<span style="font-size:12.5px;color:var(--muted);">${TT('اعتمده','Posted by')} ${invAttr(c.postedBy||'')} · ${fmtDateTime(c.postedAt)}</span>`:''}
+      ${editingPosted?`<button class="btn btn-primary" onclick="saveCountEdit('${c.id}')">${icon('check')} ${authRole==='admin'?TT('حفظ التعديل','Save changes'):TT('إرسال طلب التعديل للمدير','Send edit request to admin')}</button>
+      <button class="btn" onclick="cancelEditCount()">${T('cancel')}</button>`:''}
+      ${posted && !editingPosted && canRequestCountEdit(c) && (!c.pendingEdit || authRole==='admin')?`<button class="btn" onclick="startEditCount('${c.id}')">${icon('edit')} ${TT('تعديل الجرد','Edit count')}</button>`:''}
+      ${posted?`<span style="font-size:12.5px;color:var(--muted);">${TT('اعتمده','Posted by')} ${invAttr(c.postedBy||'')} · ${fmtDateTime(c.postedAt)}${c.editedAt?` · ${TT('آخر تعديل','Last edited')}: ${invAttr(c.editedBy||'')} · ${fmtDateTime(c.editedAt)}`:''}</span>`:''}
     </div>`;
 }
 function setCountValue(id, key, raw){
-  const c = state.stockCounts.find(x=>x.id===id); if(!canEditCount(c)) return;
+  const c = state.stockCounts.find(x=>x.id===id);
+  if(c && c.status==='posted' && countEditId===id && canRequestCountEdit(c)){
+    const v = String(raw).trim();
+    if(v==='') delete countEdits[key];
+    else countEdits[key] = Math.max(0, Math.floor(Number(latinDigits(v))||0));
+    return;
+  }
+  if(!canEditCount(c)) return;
   c.counts = c.counts || {};
   const v = String(raw).trim();
   if(v===''){ delete c.counts[key]; }
@@ -7656,12 +7759,7 @@ function postCount(id){
     const counted = Number(counts[l.key])||0; const diff = counted - (Number(l.sys)||0);
     result.push({key:l.key, code:l.code, brand:l.brand, model:l.model, name:l.name, nameAr:l.nameAr||'', sys:l.sys, counted, diff});
     if(!diff) continue;
-    let row = l.rows[0];
-    if(!row){
-      const it = l.cat || {};
-      const firstModel = String(it.model||'').split('/')[0].trim();
-      row = newStockItem({branchId:c.branchId, code:it.code||l.code, name:[it.partType||it.nameEn||it.nameAr, it.brand, it.model].filter(Boolean).join(' '), brand:it.brand||'', partType:it.partType||'', model:String(it.model||'').includes('/') ? it.model : firstModel, threshold:2, costPrice:0, sellPrice:Number(it.price)||0}, 0, 'count');
-    }
+    const row = countRowFor(c, l);
     // when one code is split over several rows, the correction lands on the first one
     addMove(row.id, diff, 'count', c.no);
   }
