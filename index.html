@@ -5446,6 +5446,43 @@ let invBrandFilter = '';
 let invPartFilter = '';
 let invTypeFilter = '';
 function invAttr(v){ return String(v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+let invShownIds = [];
+// Low-stock limit for many parts at once: a part is "low" when its quantity is at or below this number.
+function openBulkThresholdModal(){
+  if(!canManageStock()) return;
+  const shown = invShownIds.length;
+  const all = visibleInventory().filter(p=>!p.defective).length;
+  const scopeName = state.currentBranch==='all' ? TT('كل الفروع والمخزن الرئيسي','all branches and the main warehouse') : locName(state.currentBranch);
+  showModal(`
+    <h3>${TT('حد النقص للقطع','Low-stock limit')}</h3>
+    <p style="font-size:13px;color:var(--muted);line-height:1.8;margin:0 0 12px;">${TT('القطعة تطلع «منخفض» لما كميتها تكون مساوية أو أقل من هذا الرقم. حط 0 إذا ما تريد القطع تطلع منخفضة إلا لما تخلص.','A part shows as "Low" when its quantity is at or below this number. Use 0 to flag parts only when they run out.')}</p>
+    <div class="form-row"><label>${TT('حد النقص','Low-stock limit')}</label><input id="bt_value" type="number" min="0" inputmode="numeric" value="2"></div>
+    <div class="form-row"><label>${TT('يتطبق على','Apply to')}</label>
+      <select id="bt_scope">
+        <option value="shown">${TT(`القطع المعروضة حالياً بالفلاتر (${shown})`,`Parts shown with the current filters (${shown})`)}</option>
+        <option value="all">${TT(`كل القطع · ${scopeName} (${all})`,`All parts · ${scopeName} (${all})`)}</option>
+      </select></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="applyBulkThreshold()">${icon('check')} ${TT('تطبيق','Apply')}</button>
+      <button class="btn" onclick="closeModal()">${T('cancel')}</button>
+    </div>`);
+}
+function applyBulkThreshold(){
+  if(!canManageStock()) return;
+  const raw = String(document.getElementById('bt_value').value).trim();
+  if(raw===''){ alert(TT('اكتب رقم حد النقص.','Enter the low-stock limit.')); return; }
+  const v = Math.max(0, Math.floor(Number(latinDigits(raw))||0));
+  const scope = document.getElementById('bt_scope').value;
+  const ids = new Set(scope==='all' ? visibleInventory().filter(p=>!p.defective).map(p=>p.id) : invShownIds);
+  const items = state.inventory.filter(p=>ids.has(p.id) && !p.defective);
+  if(!items.length){ alert(TT('ماكو قطع.','No parts.')); return; }
+  const changing = items.filter(p=>(Number(p.threshold)||0)!==v);
+  if(!changing.length){ closeModal(); alert(TT('كل هاي القطع حد النقص مالتها أصلاً '+v+'.','All these parts already have a limit of '+v+'.')); return; }
+  if(!confirm(TT(`راح يصير حد النقص ${v} لـ ${changing.length} قطعة. تكمل؟`, `Set the low-stock limit to ${v} for ${changing.length} part(s)?`))) return;
+  changing.forEach(p=>{ p.threshold = v; });
+  logAudit('stock_edit', authRole, currentActorName(), `${TT('تغيير حد النقص','Low-stock limit changed')}: ${v} · ${changing.length} ${TT('قطعة','parts')} (${state.currentBranch==='all'?TT('كل الفروع','all locations'):locName(state.currentBranch)})`);
+  saveInventory(); closeModal(); render();
+}
 function renderInventory(){
   if(invForecastOpen) return renderForecast();
   const allInv = visibleInventory().filter(p=> invTypeFilter==='defective' ? p.defective : invTypeFilter==='parts' ? !p.defective : true);
@@ -5467,6 +5504,7 @@ function renderInventory(){
     list = list.filter(p=>(p.name+p.code+(p.brand||'')+((p.imeis||[]).join(' '))).toLowerCase().includes(q));
   }
   const manage = canManageStock();
+  invShownIds = list.filter(p=>!p.defective).map(p=>p.id);
   const hasDefective = visibleInventory().some(p=>p.defective);
   return `
     <div class="toolbar">
@@ -5494,6 +5532,7 @@ function renderInventory(){
       ${authRole==='branch' ? `<button class="btn" onclick="setPage('transfers')">${icon('transfer')} ${T('requestFromMainBtn')}</button>` : ''}
       ${authRole==='admin'?`<button class="btn" style="border-color:var(--red);color:var(--red);" onclick="resetInventoryQty()">${icon('del')} ${TT('تصفير الكميات','Reset quantities')}</button>`:''}
       ${manage?`<button class="btn btn-primary" onclick="openPartModal()">${icon('plus')} ${T('addPart')}</button>`:''}
+      ${manage?`<button class="btn" onclick="openBulkThresholdModal()" title="${TT('تحديد متى تعتبر القطعة منخفضة','Set when a part counts as low stock')}">${icon('edit')} ${TT('حد النقص','Low-stock limit')}</button>`:''}
     </div>
     ${authRole==='branch'?`<p style="font-size:12px;color:var(--muted);margin:-6px 0 12px;">${TT('كميات الفرع تتغير بس عن طريق الجوبات واستلام التحويلات. لتصحيح كمية تواصل ويه المدير أو المخزن الرئيسي.','Branch quantities change only through jobs and received transfers. To correct a quantity, contact the admin or the main warehouse.')}</p>`:''}
     <div class="panel">
