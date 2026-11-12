@@ -7552,7 +7552,7 @@ function renderStockCount(){
             <td class="mono">${n}</td>
             <td class="mono" dir="ltr" style="${net<0?'color:var(--red);':''}">${net===null?'-':(net>0?'+':'')+net}</td>
             <td style="white-space:nowrap;"><button class="btn btn-sm" onclick="openCount('${c.id}')">${TT('فتح','Open')}</button>
-              ${(canRequestCountEdit(c) && (!c.pendingEdit || authRole==='admin')) ? `<button class="btn btn-sm" onclick="startEditCount('${c.id}')" title="${TT('تعديل الجرد','Edit count')}">${icon('edit')} ${TT('تعديل','Edit')}</button>` : ''}
+              ${(canRequestCountEdit(c) && (!c.pendingEdit || authRole==='admin')) ? `<button class="btn btn-sm" onclick="startEditCount('${c.id}')" title="${TT('تعديل الجرد','Edit count')}">${icon('edit')} ${TT('تعديل','Edit')}</button>` : (c.status!=='posted' && canEditCount(c)) ? `<button class="btn btn-sm" onclick="openCount('${c.id}')" title="${TT('تعديل الجرد','Edit count')}">${icon('edit')} ${TT('تعديل','Edit')}</button>` : ''}
               ${(c.status==='draft' && (canPostCount() || c.branchId===state.authBranchId)) ? `<button class="btn btn-sm btn-danger" onclick="deleteCount('${c.id}')">${icon('del')}</button>` : ''}</td>
           </tr>`; }).join('')}</tbody>
       </table>` : emptyState(TT('ماكو جرد بعد','No counts yet'), TT('اضغط «جرد جديد» واختار الفرع.','Press "New count" and choose the location.'))}
