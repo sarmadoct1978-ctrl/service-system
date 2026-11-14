@@ -2448,8 +2448,8 @@ function renderReports(){
   const invoices = visibleInvoices();
   const totalRevenue = invoices.filter(i=>i.paid).reduce((s,i)=>s+i.total,0)
     + repairs.filter(r=>r.paid && !r.invoiceId).reduce((s,r)=>s+(r.estCost||0),0);
-  const pendingRevenue = invoices.filter(i=>!i.paid).reduce((s,i)=>s+i.total,0)
-    + repairs.filter(r=>!r.paid && !r.invoiceId && (r.estCost||0)>0).reduce((s,r)=>s+(r.estCost||0),0);
+  const pendingRevenue = invoices.filter(i=>!i.paid && !i.writtenOff).reduce((s,i)=>s+i.total,0)
+    + repairs.filter(r=>!r.paid && !r.invoiceId && !r.writtenOff && (r.estCost||0)>0).reduce((s,r)=>s+(r.estCost||0),0);
   const completedRepairs = repairs.filter(r=>r.status==='تم التسليم').length;
 
   const statusCounts = ALL_STATUSES.map(s=>({s,count:repairs.filter(r=>r.status===s).length}));
@@ -2660,16 +2660,18 @@ function handleImportDevicesExcel(evt){
 
 
 // ---- Reports: click a KPI card to see the records behind the number ----
-let reportDetailKind = null, reportDetailQ = '';
+let reportDetailKind = null, reportDetailQ = '', reportShowWrittenOff = false;
 function rdEsc(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function showReportDetail(kind){ reportDetailKind = kind; reportDetailQ = ''; drawReportDetail(); }
+function showReportDetail(kind){ reportDetailKind = kind; reportDetailQ = ''; reportShowWrittenOff = false; drawReportDetail(); }
 function reportDetailRows(kind){
   const repairs = visibleRepairs(), invoices = visibleInvoices();
   const job = r => ({type:'job', id:r.id, no:r.jobNo||'-', date:r.createdAt, who:r.customerName||'', branch:branchName(r.branchId), device:deviceLabel(r)});
   if(kind==='paid' || kind==='pending'){
     const paid = kind==='paid';
-    const inv = invoices.filter(i=>!!i.paid===paid).map(i=>({type:'inv', id:i.id, no:i.jobNo||'-', date:i.createdAt, who:i.customerName||'', branch:i.branchId?branchName(i.branchId):'-', src:TT('فاتورة','Invoice'), amount:Number(i.total)||0}));
-    const rep = repairs.filter(r=>!r.invoiceId && (paid ? r.paid : (!r.paid && (r.estCost||0)>0))).map(r=>Object.assign(job(r), {src:TT('جهاز (بدون فاتورة)','Job (no invoice)'), amount:Number(r.estCost)||0}));
+    const wo = x => !paid && (reportShowWrittenOff ? !!x.writtenOff : !x.writtenOff);
+    const keep = x => paid || wo(x);
+    const inv = invoices.filter(i=>!!i.paid===paid && keep(i)).map(i=>({type:'inv', wo:!!i.writtenOff, woNote:i.writtenOffNote||'', id:i.id, no:i.jobNo||'-', date:i.createdAt, who:i.customerName||'', branch:i.branchId?branchName(i.branchId):'-', src:TT('فاتورة','Invoice'), amount:Number(i.total)||0}));
+    const rep = repairs.filter(r=>!r.invoiceId && (paid ? r.paid : (!r.paid && (r.estCost||0)>0 && keep(r)))).map(r=>Object.assign(job(r), {wo:!!r.writtenOff, woNote:r.writtenOffNote||'', src:TT('جهاز (بدون فاتورة)','Job (no invoice)'), amount:Number(r.estCost)||0}));
     return inv.concat(rep).sort((a,b)=>new Date(b.date)-new Date(a.date));
   }
   if(kind==='delivered' || kind==='age'){
@@ -2688,9 +2690,12 @@ function drawReportDetail(){
   const th = h=>`<th>${h}</th>`;
   let head, body, foot = '';
   if(kind==='paid' || kind==='pending'){
-    head = [TT('رقم الشغلة','Job no.'), TT('التاريخ','Date'), TT('الزبون','Customer'), TT('الفرع','Branch'), TT('المصدر','Source'), TT('المبلغ','Amount')].map(th).join('');
-    body = rows.map(r=>`<tr ${r.type==='job'?`style="cursor:pointer" onclick="closeModal();openRepairModal('${r.id}')"`:''}><td class="mono">${rdEsc(r.no)}</td><td>${fmtDate(r.date)}</td><td>${rdEsc(r.who)}</td><td>${rdEsc(r.branch)}</td><td>${r.src}</td><td class="mono">${money(r.amount)}</td></tr>`).join('');
-    foot = `<tr style="font-weight:700"><td colspan="5">${TT('المجموع','Total')} (${rows.length})</td><td class="mono">${money(rows.reduce((a,r)=>a+r.amount,0))}</td></tr>`;
+    const canWO = kind==='pending' && authRole==='admin';
+    head = [TT('رقم الشغلة','Job no.'), TT('التاريخ','Date'), TT('الزبون','Customer'), TT('الفرع','Branch'), TT('المصدر','Source'), TT('المبلغ','Amount')].map(th).join('') + (canWO?th(''):'');
+    body = rows.map(r=>`<tr ${r.type==='job'?`style="cursor:pointer" onclick="closeModal();openRepairModal('${r.id}')"`:''}><td class="mono">${rdEsc(r.no)}</td><td>${fmtDate(r.date)}</td><td>${rdEsc(r.who)}</td><td>${rdEsc(r.branch)}</td><td>${r.src}${r.wo&&r.woNote?`<div style="font-size:11.5px;color:var(--muted)">${rdEsc(r.woNote)}</div>`:''}</td><td class="mono">${money(r.amount)}</td>${canWO?`<td onclick="event.stopPropagation()" style="white-space:nowrap">${r.wo
+        ? `<button class="btn btn-sm" onclick="event.stopPropagation();restorePending('${r.type}','${r.id}')">${TT('إرجاع','Restore')}</button>`
+        : `<button class="btn btn-sm" style="color:var(--red,#ef4444);border-color:var(--red,#ef4444)" onclick="event.stopPropagation();writeOffPending('${r.type}','${r.id}')">${icon('trash')} ${TT('شطب','Write off')}</button>`}</td>`:''}</tr>`).join('');
+    foot = `<tr style="font-weight:700"><td colspan="5">${reportShowWrittenOff?TT('مجموع المشطوب','Written-off total'):TT('المجموع','Total')} (${rows.length})</td><td class="mono">${money(rows.reduce((a,r)=>a+r.amount,0))}</td>${canWO?'<td></td>':''}</tr>`;
   } else if(kind==='delivered' || kind==='age'){
     head = [TT('رقم الشغلة','Job no.'), TT('الجهاز','Device'), TT('الزبون','Customer'), TT('الفرع','Branch'), TT('تاريخ الاستلام','Received'), TT('تاريخ التسليم','Delivered'), TT('العمر (يوم)','Age (days)')].map(th).join('');
     body = rows.map(r=>`<tr style="cursor:pointer" onclick="closeModal();openRepairModal('${r.id}')"><td class="mono">${rdEsc(r.no)}</td><td>${rdEsc(r.device)}</td><td>${rdEsc(r.who)}</td><td>${rdEsc(r.branch)}</td><td>${fmtDate(r.date)}</td><td>${r.delivered?fmtDate(r.delivered):'-'}</td><td class="mono">${r.age===null?'-':r.age}</td></tr>`).join('');
@@ -2705,6 +2710,7 @@ function drawReportDetail(){
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
       <h3 style="margin:0;flex:1;">${titles[kind]}</h3>
       <input id="rdSearch" placeholder="${TT('ابحث…','Search…')}" value="${invAttr(reportDetailQ)}" style="max-width:220px;">
+      ${kind==='pending'&&authRole==='admin'?`<button class="btn btn-sm ${reportShowWrittenOff?'btn-primary':''}" onclick="reportShowWrittenOff=!reportShowWrittenOff;drawReportDetail()">${reportShowWrittenOff?TT('رجوع للمبالغ الفعلية','Back to open amounts'):TT('عرض المشطوبة','Show written-off')}</button>`:''}
       <button class="btn btn-sm" onclick="exportReportDetail()">${icon('receipt')} Excel</button>
       <button class="btn btn-sm" onclick="reportDetailKind=null;closeModal()">✕</button>
     </div>
@@ -2714,6 +2720,28 @@ function drawReportDetail(){
   `, {wide:true});
   const si = document.getElementById('rdSearch');
   if(si){ si.oninput = e=>{ reportDetailQ = e.target.value; drawReportDetail(); const n=document.getElementById('rdSearch'); if(n){ n.focus(); n.setSelectionRange(n.value.length,n.value.length); } }; }
+}
+function writeOffPending(type, id){
+  if(authRole!=='admin') return;
+  const rec = type==='inv' ? state.invoices.find(x=>x.id===id) : state.repairs.find(x=>x.id===id);
+  if(!rec) return;
+  const amt = type==='inv' ? rec.total : rec.estCost;
+  const reason = prompt(TT(`شطب مبلغ ${money(amt)} (${rec.jobNo||''} – ${rec.customerName||''}) من المبالغ قيد التحصيل.\nاكتب السبب (مثلاً: قديم / غير فعلي):`,
+    `Write off ${money(amt)} (${rec.jobNo||''} – ${rec.customerName||''}) from pending amounts.\nEnter a reason (e.g. old / not real):`), TT('قديم وغير فعلي','Old / not real'));
+  if(reason===null) return;
+  rec.writtenOff = true; rec.writtenOffAt = new Date().toISOString(); rec.writtenOffBy = currentActorName(); rec.writtenOffNote = reason.trim(); rec.updatedAt = rec.writtenOffAt;
+  logAudit('write_off', authRole, currentActorName(), `${TT('شطب مبلغ قيد التحصيل','Pending amount written off')}: ${rec.jobNo||id} – ${money(amt)} – ${reason.trim()}`);
+  type==='inv' ? saveInvoices() : saveRepairs();
+  render(); drawReportDetail();
+}
+function restorePending(type, id){
+  if(authRole!=='admin') return;
+  const rec = type==='inv' ? state.invoices.find(x=>x.id===id) : state.repairs.find(x=>x.id===id);
+  if(!rec) return;
+  delete rec.writtenOff; delete rec.writtenOffAt; delete rec.writtenOffBy; delete rec.writtenOffNote; rec.updatedAt = new Date().toISOString();
+  logAudit('write_off', authRole, currentActorName(), `${TT('إرجاع مبلغ مشطوب','Written-off amount restored')}: ${rec.jobNo||id}`);
+  type==='inv' ? saveInvoices() : saveRepairs();
+  render(); drawReportDetail();
 }
 function exportReportDetail(){
   if(typeof XLSX === 'undefined'){ alert(TT('تعذّر تحميل مكتبة التصدير.','Could not load the export library.')); return; }
@@ -2732,8 +2760,8 @@ function exportReportsExcel(){
   const invoices = visibleInvoices();
   const totalRevenue = invoices.filter(i=>i.paid).reduce((s,i)=>s+i.total,0)
     + repairs.filter(r=>r.paid && !r.invoiceId).reduce((s,r)=>s+(r.estCost||0),0);
-  const pendingRevenue = invoices.filter(i=>!i.paid).reduce((s,i)=>s+i.total,0)
-    + repairs.filter(r=>!r.paid && !r.invoiceId && (r.estCost||0)>0).reduce((s,r)=>s+(r.estCost||0),0);
+  const pendingRevenue = invoices.filter(i=>!i.paid && !i.writtenOff).reduce((s,i)=>s+i.total,0)
+    + repairs.filter(r=>!r.paid && !r.invoiceId && !r.writtenOff && (r.estCost||0)>0).reduce((s,r)=>s+(r.estCost||0),0);
   const completedRepairs = repairs.filter(r=>r.status==='تم التسليم').length;
   const activeRepairs = repairs.filter(r=>!isClosedStatus(r.status)).length;
   const swapCount = repairs.filter(r=>r.serviceType==='استبدال (SWAP)').length;
@@ -8022,12 +8050,12 @@ function fillPartFromCatalog(){
 function catalogCodeDatalist(){
   return `<datalist id="catCodeList">${(state.partsCatalog||[]).map(c=>`<option value="${invAttr(c.code)}">${invAttr([c.brand,c.model,c.nameEn||c.nameAr].filter(Boolean).join(' · '))}</option>`).join('')}</datalist>`;
 }
-Object.assign(STR.ar, {auditActionCatalog:'الأصناف', auditActionCount:'الجرد'});
-Object.assign(STR.en, {auditActionCatalog:'Items catalog', auditActionCount:'Stock count'});
+Object.assign(STR.ar, {auditActionCatalog:'الأصناف', auditActionCount:'الجرد', auditActionWriteOff:'شطب مبالغ'});
+Object.assign(STR.en, {auditActionCatalog:'Items catalog', auditActionCount:'Stock count', auditActionWriteOff:'Write-off'});
 Object.assign(AUDIT_ACTION_LABELS, {stock_reset:'auditActionStockReset'});
 Object.assign(STR.ar, {auditActionStockReset:'تصفير كميات المخزون'});
 Object.assign(STR.en, {auditActionStockReset:'Stock quantities reset'});
-Object.assign(AUDIT_ACTION_LABELS, {catalog_add:'auditActionCatalog', catalog_edit:'auditActionCatalog', catalog_delete:'auditActionCatalog', catalog_import:'auditActionCatalog', stock_count:'auditActionCount'});
+Object.assign(AUDIT_ACTION_LABELS, {catalog_add:'auditActionCatalog', catalog_edit:'auditActionCatalog', catalog_delete:'auditActionCatalog', catalog_import:'auditActionCatalog', stock_count:'auditActionCount', write_off:'auditActionWriteOff'});
 ICONS.items = '<path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="2"/>';
 ICONS.count = '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3v3h6V3"/><path d="m9 13 2 2 4-4"/>';
 
