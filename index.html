@@ -3296,7 +3296,12 @@ function attachPageHandlers(){
   const ipf = document.getElementById('invPartFilter');
   if(ipf) ipf.onchange = (e)=>{ invPartFilter = e.target.value; render(); };
   const icf = document.getElementById('invClearFilters');
-  if(icf) icf.onclick = ()=>{ invBrandFilter=''; invPartFilter=''; invSearch=''; invTypeFilter=''; render(); };
+  if(icf) icf.onclick = ()=>{ invBrandFilter=''; invPartFilter=''; invSearch=''; invTypeFilter=''; invQtyFilter=''; invQtyMin=''; invQtyMax=''; render(); };
+  const iqf = document.getElementById('invQtyFilter');
+  if(iqf) iqf.onchange = (e)=>{ invQtyFilter = e.target.value; render(); if(invQtyFilter==='custom'){ const m=document.getElementById('invQtyMin'); if(m) m.focus(); } };
+  const iqs = document.getElementById('invQtySort');
+  if(iqs) iqs.onchange = (e)=>{ invQtySort = e.target.value; render(); };
+  ['invQtyMin','invQtyMax'].forEach(id=>{ const el=document.getElementById(id); if(el) el.oninput=(e)=>{ if(id==='invQtyMin') invQtyMin=e.target.value; else invQtyMax=e.target.value; render(); const n=document.getElementById(id); if(n){ n.focus(); try{ n.setSelectionRange(n.value.length,n.value.length); }catch(_){} } }; });
   const as = document.getElementById('auditSearch');
   if(as) as.oninput = (e)=>{ auditSearch = e.target.value; render(); };
   const sacc = document.getElementById('sendAllToCallCenterBtn');
@@ -5445,6 +5450,10 @@ let invSearch = '';
 let invBrandFilter = '';
 let invPartFilter = '';
 let invTypeFilter = '';
+let invQtyFilter = '';   // quantity filter: '', zero, neg, 1-5, 6-10, 11-20, gt20, custom
+let invQtyMin = '';
+let invQtyMax = '';
+let invQtySort = '';     // '', asc, desc
 function invAttr(v){ return String(v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 let invShownIds = [];
 // Low-stock limit for many parts at once: a part is "low" when its quantity is at or below this number.
@@ -5499,10 +5508,18 @@ function renderInventory(){
   if(invLowOnly) list = list.filter(p=>!p.defective && (Number(p.qty)||0)<=(Number(p.threshold)||0));
   if(invBrandFilter) list = list.filter(p=>brandKey(p)===invBrandFilter);
   if(invPartFilter) list = list.filter(p=>partKey(p)===invPartFilter);
+  if(invQtyFilter){
+    const qn = p => Number(p.qty)||0;
+    const lo = invQtyMin===''?null:Number(latinDigits(invQtyMin)), hi = invQtyMax===''?null:Number(latinDigits(invQtyMax));
+    const test = {zero:q=>q===0, neg:q=>q<0, '1-5':q=>q>=1&&q<=5, '6-10':q=>q>=6&&q<=10, '11-20':q=>q>=11&&q<=20, gt20:q=>q>20,
+      custom:q=>(lo===null||isNaN(lo)||q>=lo)&&(hi===null||isNaN(hi)||q<=hi)}[invQtyFilter];
+    if(test) list = list.filter(p=>test(qn(p)));
+  }
   if(invSearch){
     const q = invSearch.toLowerCase();
     list = list.filter(p=>(p.name+p.code+(p.brand||'')+((p.imeis||[]).join(' '))).toLowerCase().includes(q));
   }
+  if(invQtySort) list.sort((a,b)=>((Number(a.qty)||0)-(Number(b.qty)||0))*(invQtySort==='desc'?-1:1));
   const manage = canManageStock();
   invShownIds = list.filter(p=>!p.defective).map(p=>p.id);
   const hasDefective = visibleInventory().some(p=>p.defective);
@@ -5517,12 +5534,30 @@ function renderInventory(){
         <option value="">${TT('كل القطع','All parts')}</option>
         ${invParts.map(n=>`<option value="${invAttr(n)}" ${invPartFilter===n?'selected':''}>${invAttr(n)}</option>`).join('')}
       </select>
+      <select id="invQtyFilter" title="${TT('البحث حسب عدد القطع','Filter by quantity')}">
+        <option value="" ${!invQtyFilter?'selected':''}>${TT('كل الكميات','Any quantity')}</option>
+        <option value="zero" ${invQtyFilter==='zero'?'selected':''}>${TT('نفدت (0)','Out of stock (0)')}</option>
+        <option value="1-5" ${invQtyFilter==='1-5'?'selected':''}>${TT('من 1 إلى 5','1 – 5')}</option>
+        <option value="6-10" ${invQtyFilter==='6-10'?'selected':''}>${TT('من 6 إلى 10','6 – 10')}</option>
+        <option value="11-20" ${invQtyFilter==='11-20'?'selected':''}>${TT('من 11 إلى 20','11 – 20')}</option>
+        <option value="gt20" ${invQtyFilter==='gt20'?'selected':''}>${TT('أكثر من 20','More than 20')}</option>
+        <option value="neg" ${invQtyFilter==='neg'?'selected':''}>${TT('بالسالب','Negative')}</option>
+        <option value="custom" ${invQtyFilter==='custom'?'selected':''}>${TT('عدد محدد…','Custom range…')}</option>
+      </select>
+      ${invQtyFilter==='custom'?`<span style="display:inline-flex;align-items:center;gap:6px;font-size:13px;">${TT('الكمية من','Qty from')}
+        <input id="invQtyMin" type="number" inputmode="numeric" style="width:80px;" value="${invAttr(invQtyMin)}" placeholder="0">
+        ${TT('إلى','to')} <input id="invQtyMax" type="number" inputmode="numeric" style="width:80px;" value="${invAttr(invQtyMax)}" placeholder="∞"></span>`:''}
+      <select id="invQtySort" title="${TT('ترتيب حسب الكمية','Sort by quantity')}">
+        <option value="" ${!invQtySort?'selected':''}>${TT('بدون ترتيب','No sorting')}</option>
+        <option value="asc" ${invQtySort==='asc'?'selected':''}>${TT('الأقل كمية أولاً','Lowest quantity first')}</option>
+        <option value="desc" ${invQtySort==='desc'?'selected':''}>${TT('الأكثر كمية أولاً','Highest quantity first')}</option>
+      </select>
       ${hasDefective||invTypeFilter?`<select id="invTypeFilter">
         <option value="" ${!invTypeFilter?'selected':''}>${TT('كل الأصناف','All items')}</option>
         <option value="parts" ${invTypeFilter==='parts'?'selected':''}>${TT('قطع غيار','Spare parts')}</option>
         <option value="defective" ${invTypeFilter==='defective'?'selected':''}>${TT('أجهزة عاطلة (SWAP)','Defective devices (SWAP)')}</option>
       </select>`:''}
-      ${(invBrandFilter||invPartFilter||invSearch||invTypeFilter) ? `<button class="btn btn-sm" id="invClearFilters">${TT('مسح الفلاتر','Clear filters')}</button>
+      ${(invBrandFilter||invPartFilter||invSearch||invTypeFilter||invQtyFilter) ? `<button class="btn btn-sm" id="invClearFilters">${TT('مسح الفلاتر','Clear filters')}</button>
       <span style="opacity:.75;font-size:13px;">${list.length} ${TT('صنف','items')} · ${T('colQty')}: ${list.reduce((a,p)=>a+(Number(p.qty)||0),0)}</span>` : ''}
       ${manage?`<input type="file" id="importInventoryInput" accept=".xlsx,.xls" style="display:none" onchange="handleImportInventory(event)">
       <button class="btn" onclick="document.getElementById('importInventoryInput').click()">${icon('receipt')} ${T('importExcel')}</button>`:''}
