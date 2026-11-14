@@ -7595,6 +7595,41 @@ function renderStockCount(){
 }
 function openCount(id){ countOpenId = id; countEditId = null; countEdits = {}; countSearch=''; countDiffOnly=false; countBrandFilter=''; render(); }
 // Editing an approved count: anyone who can see the count may request an edit; the admin approves it.
+function openNewCountModal(){
+  if(!(state.partsCatalog||[]).length && !confirm(TT('ماكو أصناف بالسستم بعد، فالجرد راح يطلع بس القطع الموجودة بمخزن الفرع. تكمل؟','There are no items in the catalog yet, so the count will only list parts already in stock. Continue?'))) return;
+  const locs = authRole==='branch' ? [state.authBranchId] : [MAIN_WH_ID, ...state.branches.map(b=>b.id)];
+  const cur = authRole==='branch' ? state.authBranchId : (state.currentBranch!=='all' ? state.currentBranch : (authRole==='warehouse'?MAIN_WH_ID:state.branches[0]&&state.branches[0].id));
+  const brands = [...new Set([...catBrands(), ...state.inventory.map(p=>p.brand).filter(Boolean)])].sort();
+  showModal(`
+    <h3>${TT('جرد جديد','New stock count')}</h3>
+    <div class="form-row"><label>${T('branchLabel')}</label><select id="sc_branch" ${authRole==='branch'?'disabled':''}>${locs.map(l=>`<option value="${l}" ${l===cur?'selected':''}>${locName(l)}</option>`).join('')}</select></div>
+    <div class="form-row"><label>${T('colBrand')}</label><select id="sc_brand"><option value="">${TT('كل الماركات','All brands')}</option>${brands.map(b=>`<option>${invAttr(b)}</option>`).join('')}</select></div>
+    <div class="form-row"><label>${TT('ملاحظة','Note')}</label><input id="sc_note" placeholder="${TT('مثلاً: جرد نهاية الشهر','e.g. month-end count')}"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="createCount()">${TT('ابدأ الجرد','Start count')}</button>
+      <button class="btn" onclick="closeModal()">${T('cancel')}</button>
+    </div>`);
+}
+function createCount(){
+  const branchId = authRole==='branch' ? state.authBranchId : document.getElementById('sc_branch').value;
+  const brand = document.getElementById('sc_brand').value;
+  const open = (state.stockCounts||[]).find(c=>c.branchId===branchId && (c.status==='draft'||c.status==='submitted') && (c.brand||'')===brand);
+  if(open){ closeModal(); alert(TT('أكو جرد مفتوح لنفس الفرع والماركة، فتحتلك ياه.','There is already an open count for this location and brand. It has been opened.')); openCount(open.id); return; }
+  const d = new Date(); const seq = (state.stockCounts||[]).filter(c=>c.branchId===branchId).length + 1;
+  const code = branchId===MAIN_WH_ID ? 'WH' : (branchCode(branchId)||'BR');
+  const c = {id:uid(), no:`CNT-${code}-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}-${seq}`, branchId, brand, note:document.getElementById('sc_note').value.trim(),
+    status:'draft', createdAt:d.toISOString(), by:currentActorName(), counts:{}};
+  state.stockCounts.push(c);
+  logAudit('stock_count', authRole, currentActorName(), `${TT('بدء جرد','Count started')}: ${c.no} (${locName(branchId)})`);
+  saveCounts(); closeModal(); openCount(c.id);
+}
+function deleteCount(id){
+  const c = state.stockCounts.find(x=>x.id===id); if(!c || c.status!=='draft') return;
+  if(!confirm(TT(`تحذف الجرد ${c.no}؟`, `Delete count ${c.no}?`))) return;
+  state.stockCounts.splice(state.stockCounts.indexOf(c),1); addDeletion('stockCounts', id);
+  if(countOpenId===id) countOpenId = null;
+  saveCounts(); render();
+}
 function canRequestCountEdit(c){
   if(!c || c.status!=='posted') return false;
   if(authRole==='admin' || authRole==='warehouse') return true;
