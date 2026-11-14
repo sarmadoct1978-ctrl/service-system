@@ -197,6 +197,8 @@ nav{display:flex;flex-direction:column;gap:5px;flex:1;}
   box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:12px;
 }
 .kpi-top{display:flex;align-items:center;justify-content:space-between;}
+.kpi-click{cursor:pointer;transition:transform .12s,box-shadow .12s,border-color .12s;}
+.kpi-click:hover{transform:translateY(-2px);box-shadow:var(--shadow-md,0 8px 20px rgba(0,0,0,.08));border-color:var(--violet,#6366f1);}
 .kpi-icon{
   width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;
   box-shadow:inset 0 1px 0 rgba(255,255,255,0.5), inset 0 -1px 2px rgba(0,0,0,0.04);
@@ -2486,11 +2488,11 @@ function renderReports(){
       <button class="btn btn-primary" onclick="exportReportsExcel()">${icon('receipt')} ${T('exportExcel')}</button>
     </div>
     <div class="grid-auto">
-      <div class="kpi"><div class="kpi-top"><p class="kpi-label">${T('kpiPaidRevenue')}</p><div class="kpi-icon green">${icon('reports')}</div></div><p class="kpi-value">${money(totalRevenue)}</p></div>
-      <div class="kpi"><div class="kpi-top"><p class="kpi-label">${T('kpiPendingRevenue')}</p><div class="kpi-icon amber">${icon('invoices')}</div></div><p class="kpi-value">${money(pendingRevenue)}</p></div>
-      <div class="kpi"><div class="kpi-top"><p class="kpi-label">${T('kpiDelivered')}</p><div class="kpi-icon violet">${icon('devices')}</div></div><p class="kpi-value">${completedRepairs}</p></div>
-      <div class="kpi"><div class="kpi-top"><p class="kpi-label">${T('kpiAvgJobAge')}</p><div class="kpi-icon blue">${icon('history')}</div></div><p class="kpi-value">${(()=>{ const d = repairs.filter(r=>r.status==='تم التسليم' && r.deliveredAt); return d.length ? (d.reduce((a,r)=>a+jobAgeDays(r),0)/d.length).toFixed(1) : '-'; })()} <span style="font-size:13px;font-weight:500;">${T('daysLabel')}</span></p></div>
-      <div class="kpi"><div class="kpi-top"><p class="kpi-label">${T('kpiLowStock')}</p><div class="kpi-icon ${lowStock.length?'red':'violet'}">${icon('box')}</div></div><p class="kpi-value">${lowStock.length}</p></div>
+      <div class="kpi kpi-click" onclick="showReportDetail('paid')" title="${TT('اضغط لعرض التفاصيل','Click for details')}"><div class="kpi-top"><p class="kpi-label">${T('kpiPaidRevenue')}</p><div class="kpi-icon green">${icon('reports')}</div></div><p class="kpi-value">${money(totalRevenue)}</p></div>
+      <div class="kpi kpi-click" onclick="showReportDetail('pending')" title="${TT('اضغط لعرض التفاصيل','Click for details')}"><div class="kpi-top"><p class="kpi-label">${T('kpiPendingRevenue')}</p><div class="kpi-icon amber">${icon('invoices')}</div></div><p class="kpi-value">${money(pendingRevenue)}</p></div>
+      <div class="kpi kpi-click" onclick="showReportDetail('delivered')" title="${TT('اضغط لعرض التفاصيل','Click for details')}"><div class="kpi-top"><p class="kpi-label">${T('kpiDelivered')}</p><div class="kpi-icon violet">${icon('devices')}</div></div><p class="kpi-value">${completedRepairs}</p></div>
+      <div class="kpi kpi-click" onclick="showReportDetail('age')" title="${TT('اضغط لعرض التفاصيل','Click for details')}"><div class="kpi-top"><p class="kpi-label">${T('kpiAvgJobAge')}</p><div class="kpi-icon blue">${icon('history')}</div></div><p class="kpi-value">${(()=>{ const d = repairs.filter(r=>r.status==='تم التسليم' && r.deliveredAt); return d.length ? (d.reduce((a,r)=>a+jobAgeDays(r),0)/d.length).toFixed(1) : '-'; })()} <span style="font-size:13px;font-weight:500;">${T('daysLabel')}</span></p></div>
+      <div class="kpi kpi-click" onclick="showReportDetail('low')" title="${TT('اضغط لعرض التفاصيل','Click for details')}"><div class="kpi-top"><p class="kpi-label">${T('kpiLowStock')}</p><div class="kpi-icon ${lowStock.length?'red':'violet'}">${icon('box')}</div></div><p class="kpi-value">${lowStock.length}</p></div>
     </div>
 
     <div class="panel">
@@ -2656,6 +2658,73 @@ function handleImportDevicesExcel(evt){
   reader.readAsArrayBuffer(file);
 }
 
+
+// ---- Reports: click a KPI card to see the records behind the number ----
+let reportDetailKind = null, reportDetailQ = '';
+function rdEsc(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function showReportDetail(kind){ reportDetailKind = kind; reportDetailQ = ''; drawReportDetail(); }
+function reportDetailRows(kind){
+  const repairs = visibleRepairs(), invoices = visibleInvoices();
+  const job = r => ({type:'job', id:r.id, no:r.jobNo||'-', date:r.createdAt, who:r.customerName||'', branch:branchName(r.branchId), device:deviceLabel(r)});
+  if(kind==='paid' || kind==='pending'){
+    const paid = kind==='paid';
+    const inv = invoices.filter(i=>!!i.paid===paid).map(i=>({type:'inv', id:i.id, no:i.jobNo||'-', date:i.createdAt, who:i.customerName||'', branch:i.branchId?branchName(i.branchId):'-', src:TT('فاتورة','Invoice'), amount:Number(i.total)||0}));
+    const rep = repairs.filter(r=>!r.invoiceId && (paid ? r.paid : (!r.paid && (r.estCost||0)>0))).map(r=>Object.assign(job(r), {src:TT('جهاز (بدون فاتورة)','Job (no invoice)'), amount:Number(r.estCost)||0}));
+    return inv.concat(rep).sort((a,b)=>new Date(b.date)-new Date(a.date));
+  }
+  if(kind==='delivered' || kind==='age'){
+    let list = repairs.filter(r=>r.status==='تم التسليم' && (kind==='delivered' || r.deliveredAt)).map(r=>Object.assign(job(r), {delivered:r.deliveredAt, age:r.deliveredAt?jobAgeDays(r):null}));
+    return kind==='age' ? list.sort((a,b)=>b.age-a.age) : list.sort((a,b)=>new Date(b.delivered||0)-new Date(a.delivered||0));
+  }
+  if(kind==='low') return visibleInventory().filter(p=>!p.defective && p.qty<=p.threshold).map(p=>({type:'part', id:p.id, no:p.code||'-', name:p.name||'', brand:p.brand||'', branch:locName(p.branchId), qty:Number(p.qty)||0, threshold:Number(p.threshold)||0})).sort((a,b)=>a.qty-b.qty);
+  return [];
+}
+function drawReportDetail(){
+  const kind = reportDetailKind; if(!kind) return;
+  const titles = {paid:T('kpiPaidRevenue'), pending:T('kpiPendingRevenue'), delivered:T('kpiDelivered'), age:T('kpiAvgJobAge'), low:T('kpiLowStock')};
+  let rows = reportDetailRows(kind);
+  const q = reportDetailQ.trim().toLowerCase();
+  if(q) rows = rows.filter(r=>Object.values(r).join(' ').toLowerCase().includes(q));
+  const th = h=>`<th>${h}</th>`;
+  let head, body, foot = '';
+  if(kind==='paid' || kind==='pending'){
+    head = [TT('رقم الشغلة','Job no.'), TT('التاريخ','Date'), TT('الزبون','Customer'), TT('الفرع','Branch'), TT('المصدر','Source'), TT('المبلغ','Amount')].map(th).join('');
+    body = rows.map(r=>`<tr ${r.type==='job'?`style="cursor:pointer" onclick="closeModal();openRepairModal('${r.id}')"`:''}><td class="mono">${rdEsc(r.no)}</td><td>${fmtDate(r.date)}</td><td>${rdEsc(r.who)}</td><td>${rdEsc(r.branch)}</td><td>${r.src}</td><td class="mono">${money(r.amount)}</td></tr>`).join('');
+    foot = `<tr style="font-weight:700"><td colspan="5">${TT('المجموع','Total')} (${rows.length})</td><td class="mono">${money(rows.reduce((a,r)=>a+r.amount,0))}</td></tr>`;
+  } else if(kind==='delivered' || kind==='age'){
+    head = [TT('رقم الشغلة','Job no.'), TT('الجهاز','Device'), TT('الزبون','Customer'), TT('الفرع','Branch'), TT('تاريخ الاستلام','Received'), TT('تاريخ التسليم','Delivered'), TT('العمر (يوم)','Age (days)')].map(th).join('');
+    body = rows.map(r=>`<tr style="cursor:pointer" onclick="closeModal();openRepairModal('${r.id}')"><td class="mono">${rdEsc(r.no)}</td><td>${rdEsc(r.device)}</td><td>${rdEsc(r.who)}</td><td>${rdEsc(r.branch)}</td><td>${fmtDate(r.date)}</td><td>${r.delivered?fmtDate(r.delivered):'-'}</td><td class="mono">${r.age===null?'-':r.age}</td></tr>`).join('');
+    const withAge = rows.filter(r=>r.age!==null);
+    foot = `<tr style="font-weight:700"><td colspan="6">${TT('العدد','Count')}: ${rows.length}${withAge.length?` · ${TT('متوسط العمر','Average age')}`:''}</td><td class="mono">${withAge.length?(withAge.reduce((a,r)=>a+r.age,0)/withAge.length).toFixed(1):''}</td></tr>`;
+  } else {
+    head = [TT('الكود','Code'), TT('اسم القطعة','Part'), TT('الماركة','Brand'), TT('الفرع','Location'), TT('الكمية','Qty'), TT('حد النقص','Threshold')].map(th).join('');
+    body = rows.map(r=>`<tr><td class="mono">${rdEsc(r.no)}</td><td>${rdEsc(r.name)}</td><td>${rdEsc(r.brand)}</td><td>${rdEsc(r.branch)}</td><td class="mono" style="color:${r.qty<=0?'var(--red,#ef4444)':'inherit'};font-weight:700">${r.qty}</td><td class="mono">${r.threshold}</td></tr>`).join('');
+    foot = `<tr style="font-weight:700"><td colspan="6">${TT('العدد','Count')}: ${rows.length}</td></tr>`;
+  }
+  showModal(`
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+      <h3 style="margin:0;flex:1;">${titles[kind]}</h3>
+      <input id="rdSearch" placeholder="${TT('ابحث…','Search…')}" value="${invAttr(reportDetailQ)}" style="max-width:220px;">
+      <button class="btn btn-sm" onclick="exportReportDetail()">${icon('receipt')} Excel</button>
+      <button class="btn btn-sm" onclick="reportDetailKind=null;closeModal()">✕</button>
+    </div>
+    ${(state.dateFrom||state.dateTo)?`<p style="font-size:12px;color:var(--muted);margin:-6px 0 10px;">${TT('حسب فلتر التاريخ والفرع المختار فوك.','Filtered by the date range and branch selected above.')}</p>`:''}
+    ${(kind!=='low')?`<p style="font-size:12px;color:var(--muted);margin:-6px 0 10px;">${TT('اضغط على أي شغلة حتى تفتحها.','Click any job to open it.')}</p>`:''}
+    <div style="max-height:65vh;overflow:auto;"><table class="table"><thead><tr>${head}</tr></thead><tbody>${body||`<tr><td colspan="7" style="text-align:center;color:var(--muted)">${TT('ماكو بيانات','No data')}</td></tr>`}</tbody><tfoot>${foot}</tfoot></table></div>
+  `, {wide:true});
+  const si = document.getElementById('rdSearch');
+  if(si){ si.oninput = e=>{ reportDetailQ = e.target.value; drawReportDetail(); const n=document.getElementById('rdSearch'); if(n){ n.focus(); n.setSelectionRange(n.value.length,n.value.length); } }; }
+}
+function exportReportDetail(){
+  if(typeof XLSX === 'undefined'){ alert(TT('تعذّر تحميل مكتبة التصدير.','Could not load the export library.')); return; }
+  const kind = reportDetailKind, rows = reportDetailRows(kind);
+  let aoa;
+  if(kind==='paid'||kind==='pending') aoa = [[TT('رقم الشغلة','Job no.'),TT('التاريخ','Date'),TT('الزبون','Customer'),TT('الفرع','Branch'),TT('المصدر','Source'),TT('المبلغ','Amount')], ...rows.map(r=>[r.no, fmtDate(r.date), r.who, r.branch, r.src, r.amount])];
+  else if(kind==='low') aoa = [[TT('الكود','Code'),TT('اسم القطعة','Part'),TT('الماركة','Brand'),TT('الفرع','Location'),TT('الكمية','Qty'),TT('حد النقص','Threshold')], ...rows.map(r=>[r.no, r.name, r.brand, r.branch, r.qty, r.threshold])];
+  else aoa = [[TT('رقم الشغلة','Job no.'),TT('الجهاز','Device'),TT('الزبون','Customer'),TT('الفرع','Branch'),TT('تاريخ الاستلام','Received'),TT('تاريخ التسليم','Delivered'),TT('العمر (يوم)','Age (days)')], ...rows.map(r=>[r.no, r.device, r.who, r.branch, fmtDate(r.date), r.delivered?fmtDate(r.delivered):'', r.age===null?'':r.age])];
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Details');
+  XLSX.writeFile(wb, `report_${kind}_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
 function exportReportsExcel(){
   if(typeof XLSX === 'undefined'){ alert(lang==='ar'?'تعذّر تحميل مكتبة التصدير، تحقق من الاتصال بالإنترنت.':'Could not load the export library, check your internet connection.'); return; }
 
