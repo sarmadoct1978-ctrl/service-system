@@ -197,6 +197,9 @@ nav{display:flex;flex-direction:column;gap:5px;flex:1;}
   box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:12px;
 }
 .kpi-top{display:flex;align-items:center;justify-content:space-between;}
+.cnt-stat{padding:10px 14px;margin:0;cursor:pointer;transition:.12s;}
+.cnt-stat:hover{border-color:#6366f1;box-shadow:0 4px 12px rgba(0,0,0,.06);}
+.cnt-stat.on{border-color:#6366f1;background:#eef2ff;box-shadow:0 0 0 2px #c7d2fe;}
 .appr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;}
 .appr-tile{background:#fff;border:1px solid var(--line);border-inline-start:4px solid var(--ac);border-radius:12px;padding:12px 14px;cursor:pointer;transition:.12s;}
 .appr-tile:hover{box-shadow:0 6px 16px rgba(0,0,0,.08);transform:translateY(-1px);}
@@ -7533,7 +7536,7 @@ function partReqReceiveBtn(r){
                        stock moves so quantities stay movement-based.
    ===================================================================== */
 let itemSearch = '', itemBrandFilter = '', itemTypeFilter = '';
-let countOpenId = null, countSearch = '', countBrandFilter = '', countDiffOnly = false, countHideZero = false;
+let countOpenId = null, countSearch = '', countBrandFilter = '', countDiffOnly = false, countHideZero = false, countEditedOnly = false, countStatFilter = '';
 let countEditId = null, countEdits = {}; // editing an approved (posted) count
 
 function normCode(c){ return String(c||'').trim().toUpperCase().replace(/\s+/g,''); }
@@ -7989,7 +7992,7 @@ function renderStockCount(){
       </table>` : emptyState(TT('ماكو جرد بعد','No counts yet'), TT('اضغط «جرد جديد» واختار الفرع.','Press "New count" and choose the location.'))}
     </div>`;
 }
-function openCount(id){ countOpenId = id; countEditId = null; countEdits = {}; countSearch=''; countDiffOnly=false; countBrandFilter=''; render(); }
+function openCount(id){ countOpenId = id; countEditId = null; countEdits = {}; countSearch=''; countDiffOnly=false; countBrandFilter=''; countEditedOnly=false; countStatFilter=''; render(); }
 // Editing an approved count: anyone who can see the count may request an edit; the admin approves it.
 function openNewCountModal(){
   if(!(state.partsCatalog||[]).length && !confirm(TT('ماكو أصناف بالسستم بعد، فالجرد راح يطلع بس القطع الموجودة بمخزن الفرع. تكمل؟','There are no items in the catalog yet, so the count will only list parts already in stock. Continue?'))) return;
@@ -8079,15 +8082,15 @@ function applyCountEdit(c, edits, requestedBy){
       const r = byKey.get(p.key);
       const l = live.get(p.key) || {key:p.key, code:r.code, brand:r.brand, model:r.model, name:r.name, rows:[], cat:catByCode(r.code)};
       if(p.delta) addMove(countRowFor(c, l).id, p.delta, 'count_edit', ref);
-      r.counted = p.n; r.diff = p.n - (Number(r.sys)||0);
+      r.prevCounted = (r.prevCounted!==undefined ? r.prevCounted : r.counted); r.counted = p.n; r.diff = p.n - (Number(r.sys)||0); r.editedAt = new Date().toISOString(); r.editedBy = requestedBy||currentActorName();
     }else{
       const l = p.l;
       if(p.delta) addMove(countRowFor(c, l).id, p.delta, 'count_edit', ref);
-      result.push({key:l.key, code:l.code, brand:l.brand, model:l.model, name:l.name, nameAr:l.nameAr||'', sys:l.sys, counted:p.n, diff:p.delta, added:true});
+      result.push({key:l.key, code:l.code, brand:l.brand, model:l.model, name:l.name, nameAr:l.nameAr||'', sys:l.sys, counted:p.n, diff:p.delta, added:true, prevCounted:null, editedAt:new Date().toISOString(), editedBy:requestedBy||currentActorName()});
     }
   }
   const now = new Date().toISOString();
-  Object.assign(c, {result, editedAt:now, editedBy:requestedBy||currentActorName(), edits:(c.edits||[]).concat({at:now, by:requestedBy||currentActorName(), approvedBy:currentActorName(), items:plan.length, plus, minus})});
+  Object.assign(c, {result, editedAt:now, editedBy:requestedBy||currentActorName(), edits:(c.edits||[]).concat({at:now, by:requestedBy||currentActorName(), approvedBy:currentActorName(), items:plan.length, plus, minus, keys:plan.map(p=>p.key)})});
   delete c.pendingEdit;
   logAudit('stock_count', authRole, currentActorName(), `${TT('تعديل جرد معتمد','Approved count edited')}: ${c.no} (${locName(c.branchId)}) · ${plan.length} ${TT('صنف','items')} · +${plus} / ${minus}${requestedBy&&requestedBy!==currentActorName()?` · ${TT('طلب','requested by')} ${requestedBy}`:''}`);
   saveStockMoves(); saveInventory(); saveCounts();
@@ -8146,7 +8149,22 @@ function renderCountSheet(c){
   const counts = c.counts||{};
   const val = l=> editingPosted ? (countEdits[l.key]!==undefined ? countEdits[l.key] : l.counted) : (posted ? l.counted : counts[l.key]);
   const has = v=> v!=='' && v!==null && v!==undefined;
-  lines = lines.map(l=>({...l, bin: countLineBin(c, l)}));
+  const pendKeys = new Set(Object.keys((c.pendingEdit&&c.pendingEdit.counts)||{}));
+  const editState = l=>{
+    if(editingPosted && countEdits[l.key]!==undefined && String(countEdits[l.key])!==String(l.counted===undefined?'':l.counted)) return 'now';
+    if(posted && pendKeys.has(l.key)) return 'pending';
+    if(posted && (l.editedAt || l.added)) return 'done';
+    if(!posted && has(counts[l.key])) return 'counted';
+    return '';
+  };
+  lines = lines.map(l=>({...l, bin: countLineBin(c, l), es: editState(l)}));
+  const editedCount = lines.filter(l=>l.es && l.es!=='counted').length, countedCount = lines.filter(l=>l.es==='counted').length;
+  if(countEditedOnly) lines = lines.filter(l=>posted ? (l.es && l.es!=='counted') : l.es==='counted');
+  if(countStatFilter){
+    const dv = l=>{ const v = val(l); return has(v) ? Number(v)-Number(l.sys) : null; };
+    const f = {counted:l=>has(val(l)), notcounted:l=>!has(val(l)), diff:l=>{ const d = dv(l); return d!==null && d!==0; }, plus:l=>dv(l)>0, minus:l=>dv(l)<0}[countStatFilter];
+    if(f) lines = lines.filter(f);
+  }
   if(lines.some(l=>l.bin)) lines = lines.slice().sort((a,b)=>binCmp(a.bin,b.bin));
   if(countBrandFilter) lines = lines.filter(l=>l.brand===countBrandFilter);
   if(countSearch){ const q = countSearch.toLowerCase(); lines = lines.filter(l=>[l.code,l.bin,l.brand,l.model,l.name,l.nameAr].join(' ').toLowerCase().includes(q)); }
@@ -8187,19 +8205,27 @@ function renderCountSheet(c){
       <button class="btn" onclick="fillCountWithSystem('${c.id}')">${TT('عبّي الفارغ بكمية السستم','Fill blanks with system qty')}</button>`:''}
     </div>
     <div class="kpi-row" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
-      <div class="panel" style="padding:10px 14px;margin:0;">${TT('الأصناف','Items')}: <b>${all.length}</b></div>
-      <div class="panel" style="padding:10px 14px;margin:0;">${TT('انعدّت','Counted')}: <b>${done}</b></div>
-      <div class="panel" style="padding:10px 14px;margin:0;">${TT('بيها فرق','With difference')}: <b>${diffs.length}</b></div>
-      <div class="panel" style="padding:10px 14px;margin:0;">${TT('زيادة','Surplus')}: <b style="color:var(--green);" dir="ltr">+${plus}</b> · ${TT('نقص','Shortage')}: <b style="color:var(--red);" dir="ltr">${minus}</b></div>
+      ${(()=>{ const st = (k,html,title)=>`<div class="panel cnt-stat ${countStatFilter===k?'on':''}" title="${title}" onclick="countStatFilter=(countStatFilter==='${k}'?'':'${k}');render()">${html}</div>`;
+        const plusN = diffs.filter(l=>Number(val(l))>Number(l.sys)).length, minusN = diffs.filter(l=>Number(val(l))<Number(l.sys)).length;
+        return st('', `${TT('الأصناف','Items')}: <b>${all.length}</b>`, TT('عرض كل الأصناف','Show all items'))
+          + st('counted', `${TT('انعدّت','Counted')}: <b>${done}</b>`, TT('بس اللي انعدّت','Counted only'))
+          + st('notcounted', `${TT('ما انعدّت','Not counted')}: <b>${all.length-done}</b>`, TT('بس اللي ما انعدّت بعد','Not counted yet'))
+          + st('diff', `${TT('بيها فرق','With difference')}: <b>${diffs.length}</b>`, TT('بس اللي بيها فرق','Differences only'))
+          + st('plus', `${TT('زيادة','Surplus')}: <b style="color:var(--green);" dir="ltr">+${plus}</b> <span style="font-size:12px;color:var(--muted)">(${plusN} ${TT('صنف','items')})</span>`, TT('بس الأصناف الزايدة','Surplus items only'))
+          + st('minus', `${TT('نقص','Shortage')}: <b style="color:var(--red);" dir="ltr">${minus}</b> <span style="font-size:12px;color:var(--muted)">(${minusN} ${TT('صنف','items')})</span>`, TT('بس الأصناف الناقصة','Shortage items only')); })()}
+      <button class="btn ${countEditedOnly?'btn-primary':''}" style="padding:10px 16px;border-radius:14px;" onclick="countEditedOnly=!countEditedOnly;render()">✎ ${posted?TT('المعدّلة','Edited items'):TT('اللي انكتبت','Entered items')}: <b>${posted?editedCount:countedCount}</b>${countEditedOnly?` · ${TT('عرض الكل','Show all')}`:''}</button>
     </div>
     ${c.note?`<p style="font-size:13px;color:var(--muted);margin:0 0 10px;">${TT('ملاحظة','Note')}: ${invAttr(c.note)}</p>`:''}
     <div class="panel">
       ${shown.length?`<table>
         <thead><tr><th>BIN</th><th>${T('colCode')}</th><th>${T('colBrand')}</th><th>${TT('الموديل','Model')}</th><th>${TT('القطعة','Part')}</th><th>${TT('كمية السستم','System qty')}</th><th>${TT('الكمية الفعلية','Counted')}</th><th>${TT('الفرق','Diff')}</th></tr></thead>
         <tbody>${shown.map(l=>{ const v = val(l); const d = has(v) ? Number(v)-Number(l.sys) : null;
+          const esB = {now:`<span class="status-badge" style="font-size:10.5px;background:#fff7ed;color:#c2410c;border:1px solid #fdba74;">${TT('تعديل جديد – ما انحفظ','New edit – not saved')}</span>`,
+            pending:`<span class="status-badge" style="font-size:10.5px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;">${TT('بانتظار موافقة المدير','Awaiting admin approval')}${(c.pendingEdit&&c.pendingEdit.counts[l.key]!==undefined)?` → ${c.pendingEdit.counts[l.key]}`:''}</span>`,
+            done:`<span class="status-badge" style="font-size:10.5px;background:#ecfdf5;color:#047857;border:1px solid #6ee7b7;" title="${invAttr(l.editedBy||'')}">✓ ${TT('معدّل','Edited')}${l.prevCounted!==undefined&&l.prevCounted!==null?` (${TT('كان','was')} ${l.prevCounted})`:l.added?` (${TT('مضاف','added')})`:''}${l.editedAt?` · ${fmtDate(l.editedAt)}`:''}</span>`}[l.es]||'';
           return `<tr class="${d?'low-stock':''}">
             <td>${binBadge(l.bin)||'<span style="color:var(--muted)">-</span>'}</td><td class="mono">${editCell(invAttr(l.code), `editCountLineField('${c.id}','${invAttr(l.key)}','code')`, lineEdit)}</td><td>${editCell(invAttr(l.brand||'-'), `editCountLineField('${c.id}','${invAttr(l.key)}','brand')`, lineEdit)}</td><td><bdi>${editCell(invAttr(l.model||'-'), `editCountLineField('${c.id}','${invAttr(l.key)}','model')`, lineEdit)}</bdi></td>
-            <td>${editCell(invAttr(l.name||''), `editCountLineField('${c.id}','${invAttr(l.key)}','name')`, lineEdit)}${l.nameAr&&l.nameAr!==l.name?`<div style="font-size:12px;color:var(--muted);">${invAttr(l.nameAr)}</div>`:''}${l.extra?` <span class="status-badge badge-quote-pending" style="font-size:10px;">${TT('مو بالأصناف','Not in catalog')}</span>`:''}${l.fresh?` <span class="status-badge" style="font-size:10px;">${TT('ما انعدّت بالجرد','Not in the count')}</span>`:''}${l.added?` <span class="status-badge" style="font-size:10px;">${TT('أُضيفت بالتعديل','Added in edit')}</span>`:''}</td>
+            <td>${editCell(invAttr(l.name||''), `editCountLineField('${c.id}','${invAttr(l.key)}','name')`, lineEdit)}${esB?` ${esB}`:''}${l.nameAr&&l.nameAr!==l.name?`<div style="font-size:12px;color:var(--muted);">${invAttr(l.nameAr)}</div>`:''}${l.extra?` <span class="status-badge badge-quote-pending" style="font-size:10px;">${TT('مو بالأصناف','Not in catalog')}</span>`:''}${l.fresh?` <span class="status-badge" style="font-size:10px;">${TT('ما انعدّت بالجرد','Not in the count')}</span>`:''}${l.added?` <span class="status-badge" style="font-size:10px;">${TT('أُضيفت بالتعديل','Added in edit')}</span>`:''}</td>
             <td class="mono">${l.sys}</td>
             <td>${editable?`<input class="cnt-in mono" type="number" min="0" inputmode="numeric" style="width:90px;" data-k="${invAttr(l.key)}" data-c="${c.id}" value="${has(v)?v:''}">`:`<span class="mono">${has(v)?v:'-'}</span>`}</td>
             <td class="mono" dir="ltr" style="${d<0?'color:var(--red);font-weight:700;':d>0?'color:var(--green);font-weight:700;':''}">${d===null?'':(d>0?'+':'')+d}</td>
