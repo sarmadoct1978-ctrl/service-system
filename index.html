@@ -197,6 +197,18 @@ nav{display:flex;flex-direction:column;gap:5px;flex:1;}
   box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:12px;
 }
 .kpi-top{display:flex;align-items:center;justify-content:space-between;}
+.appr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;}
+.appr-tile{background:#fff;border:1px solid var(--line);border-inline-start:4px solid var(--ac);border-radius:12px;padding:12px 14px;cursor:pointer;transition:.12s;}
+.appr-tile:hover{box-shadow:0 6px 16px rgba(0,0,0,.08);transform:translateY(-1px);}
+.appr-tile .appr-n{font-size:26px;font-weight:800;color:var(--ac);line-height:1.1;}
+.appr-tile .appr-l{font-size:13px;color:var(--ink,#1f2937);margin-top:2px;}
+.appr-zero{opacity:.55;cursor:default;}.appr-zero:hover{box-shadow:none;transform:none;}
+.appr-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;}
+.appr-card{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px;background:#fff;}
+.appr-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;font-size:14px;}
+.appr-kv{display:flex;gap:10px;font-size:13px;padding:2px 0;}.appr-kv span{color:var(--muted);min-width:130px;}
+.appr-act{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+.appr-tbl,.appr-det table{width:100%;font-size:12.5px;margin-top:6px;}.appr-det summary{cursor:pointer;font-size:13px;color:#2563eb;margin-top:6px;}
 .edit-cell{cursor:pointer;border-radius:6px;padding:1px 3px;margin:-1px -3px;}
 .edit-cell:hover{background:#eef2ff;outline:1px dashed #a5b4fc;}
 .edit-pen{font-size:11px;color:#6366f1;margin-inline-start:4px;opacity:0;}
@@ -1388,12 +1400,12 @@ function renderInner(){
     ].join('');
   }else if(authRole==='admin'){
     navList.innerHTML = [
-      navBtn('dashboard',T('navDashboard'),'dashboard'),
+      navBtn('dashboard',T('navDashboard'),'dashboard',approvalsTotal()),
       navBtn('devices',T('navDevices'),'devices'),
       navBtn('swaps',T('navSwaps'),'swap',pendingSwaps + pendingVocCount()),
       navBtn('inventory',T('navInventory'),'inventory'),
       navBtn('items',TT('الأصناف','Items'),'items'),
-      navBtn('stockcount',TT('الجرد','Stock count'),'count',authRole==='admin'?(state.stockCounts||[]).filter(c=>c.status==='submitted').length:0),
+      navBtn('stockcount',TT('الجرد','Stock count'),'count',authRole==='admin'?(state.stockCounts||[]).filter(c=>c.status==='submitted' || (c.status==='posted' && c.pendingEdit)).length:0),
       navBtn('transfers',T('navTransfers'),'transfer',pendingIncomingTransfers),
       navBtn('invoices',T('navInvoices'),'invoices'),
       navBtn('callcenter',T('navCallCenter'),'phone',readyCount),
@@ -1409,7 +1421,7 @@ function renderInner(){
       navBtn('swaps',T('navSwaps'),'swap',pendingSwaps),
       navBtn('inventory',T('navInventory'),'inventory'),
       navBtn('items',TT('الأصناف','Items'),'items'),
-      navBtn('stockcount',TT('الجرد','Stock count'),'count',authRole==='admin'?(state.stockCounts||[]).filter(c=>c.status==='submitted').length:0),
+      navBtn('stockcount',TT('الجرد','Stock count'),'count',authRole==='admin'?(state.stockCounts||[]).filter(c=>c.status==='submitted' || (c.status==='posted' && c.pendingEdit)).length:0),
       navBtn('transfers',T('navTransfers'),'transfer',pendingIncomingTransfers),
       navBtn('invoices',T('navInvoices'),'invoices'),
       navBtn('callcenter',T('navCallCenter'),'phone',readyCount),
@@ -1508,6 +1520,127 @@ function statusColorClass(idx){
   return map[idx] || 'violet';
 }
 
+
+/* =====================================================================
+   Approvals centre (dashboard): every request waiting for the admin / warehouse, with approve / reject in place
+   ===================================================================== */
+let apprKind = null;
+const APPR_TYPES = {
+  swap:     {ar:'موافقة سواب / VOC', en:'SWAP / VOC approval', c:'#7c3aed', ic:'swap'},
+  count:    {ar:'جرد بانتظار الاعتماد', en:'Stock count to post', c:'#2563eb', ic:'count'},
+  countEdit:{ar:'طلب تعديل جرد', en:'Count edit request', c:'#d97706', ic:'edit'},
+  transfer: {ar:'طلب تحويل قطع', en:'Part transfer request', c:'#0891b2', ic:'transfer'},
+  partReq:  {ar:'طلب قطعة لجوب', en:'Part request for a job', c:'#dc2626', ic:'box'},
+};
+function apprLabel(k){ const t = APPR_TYPES[k]; return t ? (lang==='ar'?t.ar:t.en) : k; }
+function approvalItems(kind){
+  const admin = authRole==='admin', wh = authRole==='warehouse';
+  if(!admin && !wh) return [];
+  const out = {swap:[], count:[], countEdit:[], transfer:[], partReq:[]};
+  if(admin) out.swap = (state.repairs||[]).filter(r=>!isClosedStatus(r.status) && swapNeedsApproval(r) && (r.vocStatus||'pending')==='pending')
+    .sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt));
+  out.count = (state.stockCounts||[]).filter(c=>c.status==='submitted').sort((a,b)=>String(a.submittedAt||a.createdAt).localeCompare(String(b.submittedAt||b.createdAt)));
+  if(admin) out.countEdit = (state.stockCounts||[]).filter(c=>c.status==='posted' && c.pendingEdit).sort((a,b)=>String(a.pendingEdit.at).localeCompare(String(b.pendingEdit.at)));
+  out.transfer = (state.transfers||[]).filter(t=>t.status==='pending' && canApproveTransfer(t)).sort((a,b)=>String(a.requestedAt||'').localeCompare(String(b.requestedAt||'')));
+  out.partReq = (typeof openPartRequests==='function') ? openPartRequests() : [];
+  return kind ? (out[kind]||[]) : out;
+}
+function approvalsTotal(){ const a = approvalItems(); return Object.values(a).reduce((s,l)=>s+l.length,0); }
+function renderApprovalsPanel(){
+  if(authRole!=='admin' && authRole!=='warehouse') return '';
+  const a = approvalItems(); const total = Object.values(a).reduce((s,l)=>s+l.length,0);
+  const tiles = Object.keys(APPR_TYPES).filter(k=>authRole==='admin' || (k!=='swap' && k!=='countEdit')).map(k=>{
+    const n = a[k].length, t = APPR_TYPES[k];
+    return `<div class="appr-tile ${n?'':'appr-zero'}" style="--ac:${t.c}" onclick="${n?`openApprovals('${k}')`:''}">
+      <div class="appr-n">${n}</div><div class="appr-l">${apprLabel(k)}</div></div>`;
+  }).join('');
+  return `<div class="panel appr-panel" style="border-color:${total?'#f59e0b':'var(--line)'};">
+    <div class="panel-head" style="align-items:center;"><h3>✅ ${TT('طلبات الموافقة','Approval requests')}</h3>
+      <span class="status-badge ${total?'status-1':'badge-quote-ok'}" style="font-size:13px;">${total?`${total} ${TT('طلب بانتظارك','waiting for you')}`:TT('ماكو طلبات','Nothing pending')}</span></div>
+    <p style="font-size:12.5px;color:var(--muted);margin:-6px 0 12px;">${TT('اضغط على أي نوع حتى تشوف الطلبات وتوافق أو ترفض.','Click a type to see the requests and approve or reject them.')}</p>
+    <div class="appr-grid">${tiles}</div></div>`;
+}
+function openApprovals(kind){ apprKind = kind; drawApprovals(); }
+function apprRow(label, val){ return val===undefined||val===null||val==='' ? '' : `<div class="appr-kv"><span>${label}</span><b>${val}</b></div>`; }
+function apprCard(kind, x){
+  const E = v=> rdEsc(v);
+  if(kind==='swap'){
+    const r = x;
+    return `<div class="appr-card">
+      <div class="appr-top"><b class="mono">${E(r.jobNo||'-')}</b> · ${E(branchName(r.branchId))} <span style="flex:1"></span>${swapKindBadge(r)}</div>
+      ${apprRow(TT('الجهاز','Device'), E(deviceLabel(r)))}${apprRow('IMEI', `<span class="mono">${E(r.imei||'-')}</span>`)}
+      ${apprRow(TT('الزبون','Customer'), E(r.customerName||''))}${apprRow(TT('العطل','Issue'), E(r.issue||''))}
+      ${apprRow(TT('أيام من التفعيل','Days from activation'), r.notActive?TT('غير مفعل','Not active'):(r.swapDays!==undefined?r.swapDays:''))}
+      ${apprRow(TT('ملاحظة السواب','Swap note'), E(r.swapNote||''))}${apprRow(TT('استلم','Received'), fmtDate(r.createdAt))}
+      <div class="appr-act">
+        <button class="btn btn-primary" onclick="apprDo(()=>setVocStatus('${r.id}','approved'))">${icon('check')} ${TT('موافقة','Approve')}</button>
+        <button class="btn btn-danger" onclick="apprDo(()=>setVocStatus('${r.id}','rejected'))">${TT('رفض','Reject')}</button>
+        <button class="btn" onclick="closeModal();openRepairModal('${r.id}')">${TT('فتح الجوب','Open job')}</button></div></div>`;
+  }
+  if(kind==='count'){
+    const c = x; const lines = countLines(c); const counts = c.counts||{};
+    const entered = lines.filter(l=>counts[l.key]!==undefined && counts[l.key]!=='');
+    const diffs = entered.filter(l=>Number(counts[l.key])!==Number(l.sys));
+    const plus = diffs.reduce((a,l)=>a+Math.max(0,Number(counts[l.key])-Number(l.sys)),0), minus = diffs.reduce((a,l)=>a+Math.min(0,Number(counts[l.key])-Number(l.sys)),0);
+    return `<div class="appr-card">
+      <div class="appr-top"><b class="mono">${E(c.no)}</b> · ${E(locName(c.branchId))} <span style="flex:1"></span>${c.brand?`<span class="status-badge badge-branch">${E(c.brand)}</span>`:''}</div>
+      ${apprRow(TT('بواسطة','By'), E(c.submittedBy||c.by||''))}${apprRow(TT('التاريخ','Date'), fmtDateTime(c.submittedAt||c.createdAt))}
+      ${apprRow(TT('أصناف معدودة','Items counted'), entered.length)}${apprRow(TT('بيها فرق','With difference'), `${diffs.length} <span style="color:var(--green)" dir="ltr">+${plus}</span> / <span style="color:var(--red)" dir="ltr">${minus}</span>`)}
+      ${diffs.length?`<details class="appr-det"><summary>${TT('شوف الفروقات','See differences')}</summary><table><thead><tr><th>${T('colCode')}</th><th>${TT('القطعة','Part')}</th><th>${TT('السستم','System')}</th><th>${TT('المعدود','Counted')}</th></tr></thead><tbody>${diffs.slice(0,60).map(l=>`<tr><td class="mono">${E(l.code)}</td><td>${E(l.name)}</td><td class="mono">${l.sys}</td><td class="mono">${counts[l.key]}</td></tr>`).join('')}</tbody></table></details>`:''}
+      ${c.note?apprRow(TT('ملاحظة','Note'), E(c.note)):''}
+      <div class="appr-act">
+        <button class="btn btn-primary" onclick="apprDo(()=>postCount('${c.id}'))">${icon('check')} ${TT('اعتماد الجرد','Post count')}</button>
+        <button class="btn btn-danger" onclick="apprDo(()=>returnCount('${c.id}'))">${TT('إرجاع للفرع','Return to branch')}</button>
+        <button class="btn" onclick="closeModal();state.page='stockcount';openCount('${c.id}')">${TT('فتح الجرد','Open count')}</button></div></div>`;
+  }
+  if(kind==='countEdit'){
+    const c = x, pe = c.pendingEdit; const {plan, plus, minus} = planCountEdit(c, pe.counts);
+    return `<div class="appr-card">
+      <div class="appr-top"><b class="mono">${E(c.no)}</b> · ${E(locName(c.branchId))}</div>
+      ${apprRow(TT('طلبه','Requested by'), E(pe.by||''))}${apprRow(TT('التاريخ','Date'), fmtDateTime(pe.at))}
+      ${apprRow(TT('التغيير','Change'), `${plan.length} ${TT('صنف','items')} · <span style="color:var(--green)" dir="ltr">+${plus}</span> / <span style="color:var(--red)" dir="ltr">${minus}</span>`)}
+      ${plan.length?`<table class="appr-tbl"><thead><tr><th>${T('colCode')}</th><th>${TT('القطعة','Part')}</th><th>${TT('المعتمد','Approved')}</th><th>${TT('المطلوب','Requested')}</th></tr></thead><tbody>${plan.slice(0,60).map(p=>{ const q = p.r||p.l; return `<tr><td class="mono">${E(q.code||'')}</td><td>${E(q.name||'')}</td><td class="mono">${p.from===null?'-':p.from}</td><td class="mono">${p.n}</td></tr>`; }).join('')}</tbody></table>`:''}
+      <div class="appr-act">
+        <button class="btn btn-primary" onclick="apprDo(()=>approveCountEdit('${c.id}'))">${icon('check')} ${TT('موافقة وتصحيح المخزون','Approve & correct stock')}</button>
+        <button class="btn btn-danger" onclick="apprDo(()=>rejectCountEdit('${c.id}'))">${TT('رفض','Reject')}</button>
+        <button class="btn" onclick="closeModal();state.page='stockcount';openCount('${c.id}')">${TT('فتح الجرد','Open count')}</button></div></div>`;
+  }
+  if(kind==='transfer'){
+    const t = x; const item = state.inventory.find(i=>i.id===t.itemId);
+    return `<div class="appr-card">
+      <div class="appr-top"><b>${E(t.name)}</b> <span class="mono" style="color:var(--muted)">${E(t.code||'')}</span> <span style="flex:1"></span><b>×${t.qty}</b></div>
+      ${apprRow(TT('من','From'), E(locName(t.fromBranchId)))}${apprRow(TT('إلى','To'), E(locName(t.toBranchId)))}
+      ${apprRow(TT('المتوفر بالمرسل','Available at sender'), item?item.qty:'-')}${apprRow(TT('طلبه','Requested by'), E(t.requestedBy||''))}
+      ${apprRow(TT('التاريخ','Date'), t.requestedAt?fmtDateTime(t.requestedAt):'')}${apprRow(TT('الجوب','Job'), E(t.jobNo||''))}${apprRow(TT('ملاحظة','Note'), E(t.note||''))}
+      <div class="appr-act">
+        <button class="btn btn-primary" onclick="apprDo(()=>approveTransfer('${t.id}'))">${icon('check')} ${TT('موافقة وإرسال','Approve & send')}</button>
+        <button class="btn btn-danger" onclick="apprDo(()=>rejectTransfer('${t.id}'))">${TT('رفض','Reject')}</button></div></div>`;
+  }
+  if(kind==='partReq'){
+    const r = x, pr = r.partReq;
+    return `<div class="appr-card">
+      <div class="appr-top"><b class="mono">${E(r.jobNo||'-')}</b> · ${E(branchName(r.branchId))}</div>
+      ${apprRow(TT('القطعة المطلوبة','Part requested'), E(partReqLabel(pr)))}${apprRow(TT('الجهاز','Device'), E(deviceLabel(r)))}
+      ${apprRow(TT('طلبه','Requested by'), E(pr.by||''))}${apprRow(TT('التاريخ','Date'), fmtDateTime(pr.at))}${apprRow(TT('ملاحظة','Note'), E(pr.note||''))}
+      <div class="appr-act">
+        <button class="btn btn-primary" onclick="sendPartForRequest('${r.id}')">📨 ${TT('إرسال القطعة','Send the part')}</button>
+        <button class="btn" onclick="closeModal();openRepairModal('${r.id}')">${TT('فتح الجوب','Open job')}</button></div></div>`;
+  }
+  return '';
+}
+function drawApprovals(){
+  if(!apprKind) return;
+  const list = approvalItems(apprKind);
+  const kinds = Object.keys(APPR_TYPES).filter(k=>authRole==='admin' || (k!=='swap' && k!=='countEdit'));
+  showModal(`
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;"><h3 style="margin:0;flex:1;">${apprLabel(apprKind)} (${list.length})</h3>
+      <button class="btn btn-sm" onclick="apprKind=null;closeModal()">✕</button></div>
+    <div class="appr-tabs">${kinds.map(k=>{ const n = approvalItems(k).length; return `<button class="btn btn-sm ${k===apprKind?'btn-primary':''}" onclick="openApprovals('${k}')">${apprLabel(k)} <b>${n}</b></button>`; }).join('')}</div>
+    <div style="max-height:66vh;overflow:auto;">${list.length ? list.map(x=>apprCard(apprKind, x)).join('') : `<p style="text-align:center;color:var(--muted);padding:24px;">${TT('ماكو طلبات من هذا النوع 👍','Nothing pending here 👍')}</p>`}</div>
+  `, {wide:true});
+}
+// run an approve / reject action, then refresh the list (the action asks its own confirmation)
+function apprDo(fn){ const k = apprKind; try{ fn(); }catch(e){ console.error(e); } setTimeout(()=>{ if(k && (!document.getElementById('modalOverlay') || apprKind===k)){ apprKind = k; drawApprovals(); } }, 30); }
 function renderDashboard(){
   const repairs = visibleRepairs();
   const invoices = visibleInvoices();
@@ -3477,7 +3610,7 @@ function attachPageHandlers(){
   if(cf) cf.onchange = (e)=>{ claimFilter = e.target.value; render(); };
   { const dr = document.querySelector('.topbar .date-range'), tb = document.querySelector('#pageContent .toolbar:not(.fc-toolbar)');
     if(dr && tb){ const first = tb.querySelector('input,select'); if(first && first.nextSibling) tb.insertBefore(dr, first.nextSibling); else tb.prepend(dr); dr.classList.add('in-toolbar'); } }
-  if(state.page==='dashboard'){ const pc = document.getElementById('pageContent'); if(pc) pc.insertAdjacentHTML('afterbegin', latePanelHtml()); }
+  if(state.page==='dashboard'){ const pc = document.getElementById('pageContent'); if(pc){ pc.insertAdjacentHTML('afterbegin', latePanelHtml()); pc.insertAdjacentHTML('afterbegin', renderApprovalsPanel()); } }
   if(['dashboard','transfers'].includes(state.page) || (state.page==='inventory' && !invForecastOpen)){ const pc = document.getElementById('pageContent'); const h = partRequestsPanelHtml(); if(pc && h) pc.insertAdjacentHTML('afterbegin', h); }
   if(state.page==='swaps' && authRole==='admin'){ const n = pendingVocCount(); const pc = document.getElementById('pageContent');
     if(n && pc) pc.insertAdjacentHTML('afterbegin', `<div class="swap-pending-banner"><span>${TT(`${n} طلب سواب من المراكز بانتظار موافقتك`, `${n} SWAP request(s) from the centers waiting for your approval`)}</span><button class="btn btn-sm btn-primary" onclick="swapFilter='voc_pending';render();">${TT('اعرض الطلبات','Show requests')}</button></div>`); }
