@@ -197,6 +197,10 @@ nav{display:flex;flex-direction:column;gap:5px;flex:1;}
   box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:12px;
 }
 .kpi-top{display:flex;align-items:center;justify-content:space-between;}
+.bin-badge{display:inline-block;background:#eef2ff;color:#3730a3;border:1px solid #c7d2fe;border-radius:6px;padding:1px 7px;font-size:12px;font-weight:600;letter-spacing:.3px;white-space:nowrap;}
+.bin-cell{cursor:pointer;}
+.bin-cell:hover .bin-badge,.bin-cell:hover .bin-empty{border-color:#6366f1;}
+.bin-empty{display:inline-block;border:1px dashed #cbd5e1;color:#94a3b8;border-radius:6px;padding:1px 7px;font-size:11.5px;}
 .kpi-click{cursor:pointer;transition:transform .12s,box-shadow .12s,border-color .12s;}
 .kpi-click:hover{transform:translateY(-2px);box-shadow:var(--shadow-md,0 8px 20px rgba(0,0,0,.08));border-color:var(--violet,#6366f1);}
 .kpi-icon{
@@ -1966,8 +1970,8 @@ function exportInventoryExcel(){
   const list = visibleInventory();
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet([
-    [T('xlBranchCode'), T('xlBrand'), T('xlItemCode'), T('colPartName'), T('colQty'), T('colBuyPrice'), T('colSellPrice'), T('kpiStockCostValue'), T('kpiStockSellValue'), T('colThreshold')],
-    ...list.map(p=>[branchName(p.branchId), p.brand||'', p.code, p.name, p.qty, p.costPrice, p.sellPrice, p.qty*p.costPrice, p.qty*p.sellPrice, p.threshold])
+    [T('xlBranchCode'), T('xlBrand'), T('xlItemCode'), 'BIN', T('colPartName'), T('colQty'), T('colBuyPrice'), T('colSellPrice'), T('kpiStockCostValue'), T('kpiStockSellValue'), T('colThreshold')],
+    ...list.map(p=>[branchName(p.branchId), p.brand||'', p.code, p.bin||'', p.name, p.qty, p.costPrice, p.sellPrice, p.qty*p.costPrice, p.qty*p.sellPrice, p.threshold])
   ]);
   XLSX.utils.book_append_sheet(wb, ws, T('inventoryReportsTitle'));
 
@@ -2007,6 +2011,7 @@ function handleImportInventory(evt){
         const threshold = Number(pick(row, ['حد التنبيه','Threshold','Low Stock Threshold'])) || 3;
         const partType = String(pick(row, ['نوع القطعة','النوع','Part Type','Type'])).trim() || (typeof inferPartType==='function' ? (inferPartType(name)||'') : '');
         const model = String(pick(row, ['الموديل','Model','model'])).trim();
+        const bin = normBin(pick(row, ['BIN','Bin','bin','BIN Code','Bin Code','BIN code','موقع الرف','الموقع']));
 
         let branchId = defaultBranchId;
         if(authRole==='admin' || authRole==='warehouse'){
@@ -2027,9 +2032,10 @@ function handleImportInventory(evt){
           if(threshold) existing.threshold = threshold;
           if(partType) existing.partType = partType;
           if(model) existing.model = model;
+          if(bin) existing.bin = bin;
           updated++;
         }else{
-          newStockItem({branchId, code, name, brand, partType, model, threshold, costPrice, sellPrice}, qty, 'import');
+          newStockItem({branchId, code, name, brand, partType, model, threshold, costPrice, sellPrice, bin}, qty, 'import');
           added++;
         }
       });
@@ -2082,6 +2088,20 @@ function cancelTransferRequest(id){
   render();
 }
 function canManageStock(){ return authRole==='admin' || authRole==='warehouse'; }
+// BIN code = shelf location of a part inside its own store (main warehouse or branch)
+function normBin(v){ return String(v||'').trim().toUpperCase().replace(/\s+/g,''); }
+function binCmp(a,b){ const x=normBin(a), y=normBin(b); if(!x&&!y) return 0; if(!x) return 1; if(!y) return -1; return x.localeCompare(y,'en',{numeric:true}); }
+function canEditBin(p){ return !!p && (canManageStock() || (authRole==='branch' && p.branchId===state.authBranchId)); }
+function binBadge(v){ const b = normBin(v); return b ? `<span class="bin-badge mono">${b}</span>` : ''; }
+function setPartBin(id){
+  const p = state.inventory.find(x=>x.id===id); if(!canEditBin(p)) return;
+  const v = prompt(TT(`BIN Code (مكان القطعة بالرف) لـ «${p.name}» بـ ${locName(p.branchId)}\nمثال: A-03-02 (منطقة-رف-درج). اتركه فارغ حتى تمسحه.`, `BIN code (shelf location) for "${p.name}" in ${locName(p.branchId)}\ne.g. A-03-02 (zone-shelf-drawer). Leave empty to clear.`), p.bin||'');
+  if(v===null) return;
+  const before = p.bin||''; p.bin = normBin(v); p.updatedAt = new Date().toISOString();
+  if(before===p.bin) return;
+  logAudit('stock_edit', authRole, currentActorName(), `BIN: ${p.name} (${locName(p.branchId)}) ${before||'-'} → ${p.bin||'-'}`);
+  saveInventory(); render();
+}
 let directTransferItem = null;
 function openDirectTransferModal(invId){
   if(!canManageStock()){ alert(T('alertNoPermission')); return; }
@@ -2116,7 +2136,7 @@ function openIssueStockModal(invId){
   issueStockItem = item;
   showModal(`
     <h3>${T('issueStockTitle')}</h3>
-    <p style="font-size:13px;color:var(--muted);margin-top:-6px;">${item.name} (${item.code}) — ${branchName(item.branchId)} — ${T('available')}: ${item.qty}</p>
+    <p style="font-size:13px;color:var(--muted);margin-top:-6px;">${item.name} (${item.code}) — ${branchName(item.branchId)} — ${T('available')}: ${item.qty}${item.bin?` — BIN ${binBadge(item.bin)}`:''}</p>
     <div class="form-row"><label>${T('transferQty')}</label><input id="is_qty" type="number" min="1" max="${item.qty}" value="1"></div>
     <div class="form-row"><label>${T('issueReasonLabel')}</label><input id="is_reason" placeholder="${T('issueReasonPh')}"></div>
     <div class="modal-actions">
@@ -2801,8 +2821,8 @@ function exportReportsExcel(){
   XLSX.utils.book_append_sheet(wb, wsLowStock, T('xlLowStockSheet'));
 
   const wsInventory = XLSX.utils.aoa_to_sheet([
-    [T('xlBranchCode'), T('xlBrand'), T('xlItemCode'), T('colPartName'), T('colQty'), T('colBuyPrice'), T('colSellPrice'), T('kpiStockCostValue'), T('kpiStockSellValue')],
-    ...visibleInventory().map(p=>[branchName(p.branchId), p.brand||'', p.code, p.name, p.qty, p.costPrice, p.sellPrice, p.qty*p.costPrice, p.qty*p.sellPrice])
+    [T('xlBranchCode'), T('xlBrand'), T('xlItemCode'), 'BIN', T('colPartName'), T('colQty'), T('colBuyPrice'), T('colSellPrice'), T('kpiStockCostValue'), T('kpiStockSellValue')],
+    ...visibleInventory().map(p=>[branchName(p.branchId), p.brand||'', p.code, p.bin||'', p.name, p.qty, p.costPrice, p.sellPrice, p.qty*p.costPrice, p.qty*p.sellPrice])
   ]);
   XLSX.utils.book_append_sheet(wb, wsInventory, T('inventoryReportsTitle'));
 
@@ -5350,7 +5370,7 @@ function renderModalParts(){
   }else{
     wrap.innerHTML = swRows + modalPartsUsed.map((it,idx)=>`
       <div class="item-row">
-        <span style="flex:1;font-size:13px;">${it.name} (${it.code})</span>
+        <span style="flex:1;font-size:13px;">${it.name} (${it.code})${(()=>{ const ip = state.inventory.find(x=>x.id===it.invId); return ip&&ip.bin?' '+binBadge(ip.bin):''; })()}</span>
         <span class="mono" style="width:60px;text-align:center;">×${it.qty}</span>
         <span class="part-price-cell" style="display:${isModalOutWarranty()?'inline-flex':'none'};align-items:center;gap:4px;font-size:12px;color:var(--muted);">${TT('السعر','Price')}
           <input type="text" inputmode="numeric" class="part-price-in mono" style="width:95px;padding:4px 6px;text-align:center;" placeholder="0" value="${(Number(it.price)||0)?money(it.price):''}" oninput="setModalPartPrice(${idx},this.value)" onblur="this.value=fmtIQDInput(this.value)"></span>
@@ -5614,7 +5634,7 @@ function renderInventory(){
   }
   if(invSearch){
     const q = invSearch.toLowerCase();
-    list = list.filter(p=>(p.name+p.code+(p.brand||'')+((p.imeis||[]).join(' '))).toLowerCase().includes(q));
+    list = list.filter(p=>(p.name+p.code+(p.brand||'')+' '+(p.bin||'')+' '+((p.imeis||[]).join(' '))).toLowerCase().includes(q));
   }
   if(invQtySort) list.sort((a,b)=>((Number(a.qty)||0)-(Number(b.qty)||0))*(invQtySort==='desc'?-1:1));
   const manage = canManageStock();
@@ -5670,12 +5690,13 @@ function renderInventory(){
     <div class="panel">
       ${list.length ? `
       <table>
-        <thead><tr><th>${T('colBranch')}</th><th>${T('colCode')}</th><th>${T('colPartName')}</th><th>${T('colBrand')}</th><th>${T('colQty')}</th><th>${T('colBuyPrice')}</th><th>${T('colSellPrice')}</th><th></th></tr></thead>
+        <thead><tr><th>${T('colBranch')}</th><th>${T('colCode')}</th><th>BIN</th><th>${T('colPartName')}</th><th>${T('colBrand')}</th><th>${T('colQty')}</th><th>${T('colBuyPrice')}</th><th>${T('colSellPrice')}</th><th></th></tr></thead>
         <tbody>
           ${list.map(p=>`
             <tr class="${p.qty<=p.threshold?'low-stock':''}">
               <td>${branchName(p.branchId)}</td>
               <td class="mono">${p.code}</td>
+              ${canEditBin(p)?`<td class="bin-cell" title="${TT('اضغط لتعديل الـ BIN','Click to edit BIN')}" onclick="setPartBin('${p.id}')">${binBadge(p.bin)||`<span class="bin-empty">+ BIN</span>`}</td>`:`<td>${binBadge(p.bin)||'<span style="color:var(--muted)">-</span>'}</td>`}
               <td>${p.name}${(p.partType && !p.defective)?` <span class="status-badge badge-branch" style="font-size:10.5px;">${p.partType}</span>`:''}${p.defective?` <span class="status-badge badge-defective">${TT('عاطل','Defective')}</span>`:''}${(!p.defective && p.qty<=p.threshold)?` <span class="status-badge status-1">${T('lowBadge')}</span>`:''}${(p.defective && (p.imeis||[]).length)?`<div style="font-size:11px;color:var(--muted);" class="mono">IMEI: ${(p.imeis||[]).slice(0,4).join('، ')}${(p.imeis||[]).length>4?' …':''}</div>`:''}</td>
               <td>${p.brand||'-'}${p.model?`<div style="font-size:11.5px;color:var(--muted);">${p.model}</div>`:''}</td>
               <td class="mono">
@@ -5775,6 +5796,7 @@ function savePart(id){
   const model = ((document.getElementById('p_model')||{}).value||'').trim();
   const qty = Number(document.getElementById('p_qty').value)||0;
   const threshold = Number(document.getElementById('p_threshold').value)||0;
+  const bin = normBin((document.getElementById('p_bin')||{}).value);
   const costPrice = parseIQD(document.getElementById('p_cost').value);
   const sellPrice = parseIQD(document.getElementById('p_sell').value);
   if(!partType){ alert(TT('اختار نوع القطعة','Choose the part type')); return; }
@@ -5786,14 +5808,14 @@ function savePart(id){
   }
   if(existingPart){
     const before = Number(existingPart.qty)||0;
-    Object.assign(existingPart, {branchId,code,name,brand,partType,model,threshold,costPrice,sellPrice});
+    Object.assign(existingPart, {branchId,code,name,brand,partType,model,threshold,costPrice,sellPrice,bin});
     if(before!==qty){
       addMove(existingPart.id, qty-before, 'count');
       logAudit('stock_edit', authRole, currentActorName(), `${T('auditStockEdited')}: ${name} (${branchName(branchId)}) ${before} → ${qty}`);
       saveStockMoves();
     }
   }else{
-    newStockItem({branchId,code,name,brand,partType,model,threshold,costPrice,sellPrice}, qty, 'add');
+    newStockItem({branchId,code,name,brand,partType,model,threshold,costPrice,sellPrice,bin}, qty, 'add');
     logAudit('stock_add', authRole, currentActorName(), `${T('auditStockAdded')}: ${name} ×${qty} (${branchName(branchId)})`);
     saveStockMoves();
   }
@@ -6604,7 +6626,7 @@ function partOptionsHtml(branchId, type, brand, model){
     const f = partFit(p, type, brand, model);
     if(f==='exact') exact.push(p); else if(f==='general') general.push(p);
   }
-  const opt = p=>`<option value="${p.id}" ${(Number(p.qty)||0)<=0?'disabled':''}>${p.name}${enName(partTypeOf(p)) && !String(p.name).toLowerCase().includes(enName(partTypeOf(p)).split(' ')[0].toLowerCase())?' · '+enName(partTypeOf(p)):''}${p.model?'':' ('+TT('عام','generic')+')'} — ${T('available')}: ${p.qty}${p.code?' · '+p.code:''}</option>`;
+  const opt = p=>`<option value="${p.id}" ${(Number(p.qty)||0)<=0?'disabled':''}>${p.name}${enName(partTypeOf(p)) && !String(p.name).toLowerCase().includes(enName(partTypeOf(p)).split(' ')[0].toLowerCase())?' · '+enName(partTypeOf(p)):''}${p.model?'':' ('+TT('عام','generic')+')'} — ${T('available')}: ${p.qty}${p.code?' · '+p.code:''}${p.bin?' · BIN '+normBin(p.bin):''}</option>`;
   let html = '';
   if(exact.length) html += `<optgroup label="${TT('مطابقة للجهاز','Matches this device')}: ${[brand,model].filter(Boolean).join(' ')}">${exact.map(opt).join('')}</optgroup>`;
   if(general.length) html += `<optgroup label="${exact.length?TT('قطع عامة / بدون موديل محدد','Generic parts / no model set'):TT('القطع المتوفرة','Available parts')}">${general.map(opt).join('')}</optgroup>`;
@@ -6674,7 +6696,7 @@ function duplicatePartError(lines){
 function fillPartCodeList(){
   const dl = document.getElementById('partCodeList'); if(!dl) return;
   const items = state.inventory.filter(p=>p.branchId===modalCtx.branchId && !p.defective && p.code && (Number(p.qty)||0)>0);
-  dl.innerHTML = items.map(p=>`<option value="${p.code}">${p.name} — ${T('available')}: ${p.qty}</option>`).join('');
+  dl.innerHTML = items.map(p=>`<option value="${p.code}">${p.name} — ${T('available')}: ${p.qty}${p.bin?' — BIN '+normBin(p.bin):''}</option>`).join('');
 }
 // add a part straight from its stock code, without choosing type or name from the lists
 function addPartByCode(){
@@ -6733,6 +6755,7 @@ function openPartModal(id){
       <div class="form-row"><label>${T('qty')}</label><input id="p_qty" type="number" value="${editing?editing.qty:0}"></div>
       <div class="form-row"><label>${T('lowStockThreshold')}</label><input id="p_threshold" type="number" value="${editing?editing.threshold:3}"></div>
     </div>
+    <div class="form-row"><label>BIN Code <span style="font-weight:400;color:var(--muted);font-size:12px;">${TT('(مكان القطعة بالرف، مثال A-03-02)','(shelf location, e.g. A-03-02)')}</span></label><input id="p_bin" class="mono" style="text-transform:uppercase;" value="${editing?invAttr(editing.bin||''):''}" placeholder="A-03-02"></div>
     <div class="form-2col">
       <div class="form-row"><label>${T('buyPrice')}</label><input id="p_cost" type="text" inputmode="numeric" class="money-in" onblur="this.value=fmtIQDInput(this.value)" value="${editing&&editing.costPrice?money(editing.costPrice):''}"></div>
       <div class="form-row"><label>${T('sellPrice')}</label><input id="p_sell" type="text" inputmode="numeric" class="money-in" onblur="this.value=fmtIQDInput(this.value)" value="${editing&&editing.sellPrice?money(editing.sellPrice):''}"></div>
@@ -7635,6 +7658,10 @@ function canEditCount(c){
   return canPostCount();
 }
 // the lines of a count: every catalog item in scope + any other stock row the location already has
+function countLineBin(c, l){
+  const k = l.key; const it = state.inventory.find(p=>p.branchId===c.branchId && !p.defective && p.bin && (p.code ? normCode(p.code)===k : ('inv:'+p.id)===k));
+  return it ? normBin(it.bin) : '';
+}
 function countLines(c){
   const scope = c.brand || '';
   const inv = state.inventory.filter(p=>p.branchId===c.branchId && !p.defective && (!scope || (p.brand||'')===scope));
@@ -7847,8 +7874,10 @@ function renderCountSheet(c){
   const counts = c.counts||{};
   const val = l=> editingPosted ? (countEdits[l.key]!==undefined ? countEdits[l.key] : l.counted) : (posted ? l.counted : counts[l.key]);
   const has = v=> v!=='' && v!==null && v!==undefined;
+  lines = lines.map(l=>({...l, bin: countLineBin(c, l)}));
+  if(lines.some(l=>l.bin)) lines = lines.slice().sort((a,b)=>binCmp(a.bin,b.bin));
   if(countBrandFilter) lines = lines.filter(l=>l.brand===countBrandFilter);
-  if(countSearch){ const q = countSearch.toLowerCase(); lines = lines.filter(l=>[l.code,l.brand,l.model,l.name,l.nameAr].join(' ').toLowerCase().includes(q)); }
+  if(countSearch){ const q = countSearch.toLowerCase(); lines = lines.filter(l=>[l.code,l.bin,l.brand,l.model,l.name,l.nameAr].join(' ').toLowerCase().includes(q)); }
   if(countDiffOnly) lines = lines.filter(l=>has(val(l)) && Number(val(l))!==Number(l.sys));
   if(countHideZero) lines = lines.filter(l=>Number(l.sys)!==0 || has(val(l)));
   const all = base;
@@ -7893,10 +7922,10 @@ function renderCountSheet(c){
     ${c.note?`<p style="font-size:13px;color:var(--muted);margin:0 0 10px;">${TT('ملاحظة','Note')}: ${invAttr(c.note)}</p>`:''}
     <div class="panel">
       ${shown.length?`<table>
-        <thead><tr><th>${T('colCode')}</th><th>${T('colBrand')}</th><th>${TT('الموديل','Model')}</th><th>${TT('القطعة','Part')}</th><th>${TT('كمية السستم','System qty')}</th><th>${TT('الكمية الفعلية','Counted')}</th><th>${TT('الفرق','Diff')}</th></tr></thead>
+        <thead><tr><th>BIN</th><th>${T('colCode')}</th><th>${T('colBrand')}</th><th>${TT('الموديل','Model')}</th><th>${TT('القطعة','Part')}</th><th>${TT('كمية السستم','System qty')}</th><th>${TT('الكمية الفعلية','Counted')}</th><th>${TT('الفرق','Diff')}</th></tr></thead>
         <tbody>${shown.map(l=>{ const v = val(l); const d = has(v) ? Number(v)-Number(l.sys) : null;
           return `<tr class="${d?'low-stock':''}">
-            <td class="mono">${invAttr(l.code)}</td><td>${invAttr(l.brand||'-')}</td><td><bdi>${invAttr(l.model||'-')}</bdi></td>
+            <td>${binBadge(l.bin)||'<span style="color:var(--muted)">-</span>'}</td><td class="mono">${invAttr(l.code)}</td><td>${invAttr(l.brand||'-')}</td><td><bdi>${invAttr(l.model||'-')}</bdi></td>
             <td>${invAttr(l.name||'')}${l.nameAr&&l.nameAr!==l.name?`<div style="font-size:12px;color:var(--muted);">${invAttr(l.nameAr)}</div>`:''}${l.extra?` <span class="status-badge badge-quote-pending" style="font-size:10px;">${TT('مو بالأصناف','Not in catalog')}</span>`:''}${l.fresh?` <span class="status-badge" style="font-size:10px;">${TT('ما انعدّت بالجرد','Not in the count')}</span>`:''}${l.added?` <span class="status-badge" style="font-size:10px;">${TT('أُضيفت بالتعديل','Added in edit')}</span>`:''}</td>
             <td class="mono">${l.sys}</td>
             <td>${editable?`<input class="cnt-in mono" type="number" min="0" inputmode="numeric" style="width:90px;" data-k="${invAttr(l.key)}" data-c="${c.id}" value="${has(v)?v:''}">`:`<span class="mono">${has(v)?v:'-'}</span>`}</td>
@@ -7977,13 +8006,13 @@ function exportCountExcel(id){
   const c = state.stockCounts.find(x=>x.id===id); if(!c) return;
   if(typeof XLSX==='undefined'){ alert(T('importError')); return; }
   const posted = c.status==='posted';
-  const lines = posted ? (c.result||[]) : countLines(c);
+  const lines = (posted ? (c.result||[]) : countLines(c)).map(l=>({...l, bin: countLineBin(c, l)})).sort((a,b)=>binCmp(a.bin,b.bin));
   const counts = c.counts||{};
-  const rows = lines.map(l=>{ const v = posted ? l.counted : counts[l.key]; const has = v!==undefined && v!==''; return [l.code, l.brand||'', l.model||'', l.name||'', l.nameAr||'', l.sys, has?v:'', has?Number(v)-Number(l.sys):'']; });
+  const rows = lines.map(l=>{ const v = posted ? l.counted : counts[l.key]; const has = v!==undefined && v!==''; return [l.bin||'', l.code, l.brand||'', l.model||'', l.name||'', l.nameAr||'', l.sys, has?v:'', has?Number(v)-Number(l.sys):'']; });
   const ws = XLSX.utils.aoa_to_sheet([
     [`${c.no} · ${locName(c.branchId)} · ${c.brand||'All brands'} · ${fmtDateTime(c.createdAt)}`],
-    ['Code','Brand','Model','Part','Part (AR)','System Qty','Counted Qty','Difference'], ...rows]);
-  ws['!cols'] = [{wch:20},{wch:10},{wch:16},{wch:26},{wch:18},{wch:11},{wch:12},{wch:11}];
+    ['BIN','Code','Brand','Model','Part','Part (AR)','System Qty','Counted Qty','Difference'], ...rows]);
+  ws['!cols'] = [{wch:11},{wch:20},{wch:10},{wch:16},{wch:26},{wch:18},{wch:11},{wch:12},{wch:11}];
   const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Count');
   XLSX.writeFile(wb, `${c.no}.xlsx`);
 }
