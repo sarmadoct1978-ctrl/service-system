@@ -2142,14 +2142,16 @@ function editPartField(id, field){
 // edit from an open stock-count line: changes the stock rows of that code (and the catalog item)
 function editCountLineField(countId, key, field){
   if(!canManageStock()){ alert(T('alertNoPermission')); return; }
-  const c = (state.stockCounts||[]).find(x=>x.id===countId); if(!c || c.status==='posted') return;
-  const line = countLines(c).find(l=>l.key===key); if(!line) return;
+  const c = (state.stockCounts||[]).find(x=>x.id===countId); if(!c) return;
+  if(c.status==='posted' && countEditId!==c.id) return;
+  const line = countLines(c).find(l=>l.key===key) || (c.result||[]).find(l=>l.key===key); if(!line) return;
   const cat = line.cat;
   const cur = field==='name' ? (line.name||'') : (line[field]||'');
-  const v = prompt(`${partFieldLabel(field)} — ${line.name||line.code}`, cur);
+  const v = prompt(`${partFieldLabel(field)} — ${line.name||line.code}`, cur==='-'?'':cur);
   if(v===null || v.trim()===String(cur).trim()) return;
   if(field==='name' && !v.trim()){ alert(TT('اسم القطعة ما يصير يكون فارغ.','Part name cannot be empty.')); return; }
-  const allRows = line.code && line.code!=='-' ? state.inventory.filter(x=>!x.defective && normCode(x.code)===key) : (line.rows||[]);
+  const allRows = String(key).startsWith('inv:') ? state.inventory.filter(x=>'inv:'+x.id===key)
+    : (line.code && line.code!=='-' ? state.inventory.filter(x=>!x.defective && normCode(x.code)===key) : (line.rows||[]));
   if(field==='name' && cat){
     if(cat.nameEn) cat.nameEn = v.trim(); else if(cat.nameAr) cat.nameAr = v.trim(); else cat.nameEn = v.trim();
     cat.updatedAt = new Date().toISOString(); saveCatalog();
@@ -2166,6 +2168,8 @@ function editCountLineField(countId, key, field){
   }else if(cat && (field==='brand' || field==='model')){
     cat[field] = v.trim(); cat.updatedAt = new Date().toISOString(); saveCatalog();
   }
+  // keep the stored result of a posted count readable with the new value
+  if(Array.isArray(c.result)){ let ch = false; c.result.forEach(r=>{ if(r.key===key){ r[field] = v.trim(); ch = true; } }); if(ch) saveCounts(); }
   logAudit('stock_edit', authRole, currentActorName(), `${partFieldLabel(field)} (${TT('من الجرد','from count')} ${c.no}): ${cur||'-'} → ${v.trim()||'-'}`);
   render();
 }
@@ -3603,6 +3607,58 @@ function deadSet(key){
   last.forEach((d,rid)=>{ if(!d.restore) s.add(rid); });
   return s;
 }
+
+/* ---------- duplicate branches: keep the one with staff/data, move everything else onto it ---------- */
+// Two devices that each created the default branches give the same branch two ids; after syncing both show up.
+function branchKeyName(b){ return String(b && b.name || '').trim().toUpperCase().replace(/\s+/g,''); }
+function branchRefCount(id){
+  let n = 0;
+  const walk = v=>{ if(v===id) n++; else if(Array.isArray(v)) v.forEach(walk); else if(v && typeof v==='object') for(const k in v){ if(k===id) n++; walk(v[k]); } };
+  for(const k of ARRAY_KEYS.concat(['stockMoves'])) if(k!=='branches') walk(getVal(k));
+  return n;
+}
+function remapBranchId(oldId, newId){
+  const changed = new Set();
+  const walk = (v, key)=>{
+    if(Array.isArray(v)){ for(let i=0;i<v.length;i++){ if(v[i]===oldId){ v[i]=newId; changed.add(key); } else walk(v[i], key); } return; }
+    if(v && typeof v==='object'){
+      for(const k of Object.keys(v)){
+        if(v[k]===oldId){ v[k]=newId; changed.add(key); } else walk(v[k], key);
+        if(k===oldId){ v[newId] = v[k]; delete v[k]; changed.add(key); }
+      }
+    }
+  };
+  for(const k of ARRAY_KEYS.concat(['stockMoves','jobSeq'])) if(k!=='branches') walk(getVal(k), k);
+  return changed;
+}
+function dedupeBranches(){
+  const groups = new Map();
+  (state.branches||[]).forEach(b=>{ const k = branchKeyName(b); if(!k) return; if(!groups.has(k)) groups.set(k, []); groups.get(k).push(b); });
+  const touched = new Set(); let removed = 0;
+  groups.forEach(list=>{
+    if(list.length<2) return;
+    const score = b=> (Array.isArray(b.staff)?b.staff.length:0)*1e6 + branchRefCount(b.id);
+    // highest score wins; ties go to the smallest id, so every device makes the same choice
+    const keep = list.slice().sort((a,b)=> (score(b)-score(a)) || String(a.id).localeCompare(String(b.id)))[0];
+    list.filter(b=>b!==keep).forEach(d=>{
+      remapBranchId(d.id, keep.id).forEach(k=>touched.add(k));
+      // staff that only exists on the duplicate moves over
+      (d.staff||[]).forEach(st=>{ if(!(keep.staff||[]).some(x=>x.name===st.name)) (keep.staff = keep.staff||[]).push(st); });
+      // the plain login name (erb1, bsr7...) stays usable
+      const planUsers = BRANCH_PLAN.map(x=>x[1]); if(d.username && keep.username!==d.username && planUsers.includes(d.username) && !planUsers.includes(keep.username)) keep.username = d.username;
+      if(state.authBranchId===d.id) state.authBranchId = keep.id;
+      state.branches = state.branches.filter(b=>b!==d);
+      addDeletion('branches', d.id);
+      removed++;
+      logAudit('branch_merge', authRole||'system', currentActorName ? currentActorName() : 'system', `${TT('دمج فرع مكرر','Merged duplicate branch')}: ${keep.name} (${d.id} → ${keep.id})`);
+    });
+  });
+  if(removed){
+    touched.forEach(k=>queueSave(k));
+    queueSave('branches');
+  }
+  return removed;
+}
 function addDeletion(key, rid, restore){
   if(!state.deletions) state.deletions = [];
   state.deletions.push({id:uid(), key, rid, ts:nowTs(), restore: restore?true:undefined, by:currentActorName()});
@@ -4042,6 +4098,7 @@ async function pullChanges(force){
       if(after!==JSON.stringify(remote)) sync.dirty.add(k);
       cacheLocal(k, sync.dirty.has(k));
     }
+    if(changed && dedupeBranches()) changed = true;
     if(!sync.dirty.size) sync.error = null;
     sync.lastOk = Date.now();
   }catch(e){
@@ -4427,7 +4484,7 @@ async function loadAll(){
   recomputeQty();
 
   let needsBranchSave = false, needsRepairSave = false, needsInvoiceSave = false, needsInventorySave = false;
-  if(!state.branches.length){ state.branches = DEFAULT_BRANCHES.map(b=>({id:uid(), ...b})); needsBranchSave = true; }
+  if(!state.branches.length){ state.branches = DEFAULT_BRANCHES.map(b=>({id:'br-'+b.username, ...b})); needsBranchSave = true; }
   // Oct 2026 branch plan: names and order as the company uses them. Runs once; existing branches are renamed by
   // their city code (MUS, SUL, BSR...) so their jobs, staff and logins stay attached.
   // only on fresh Drive data (or a stand-alone offline copy), so two devices never each create the same branch
@@ -4436,7 +4493,7 @@ async function loadAll(){
     const plan = BRANCH_PLAN.map(([name, username])=>{
       let b = state.branches.find(x=>code(x.name)===code(name));
       if(b){ if(b.name!==name){ b.name = name; needsBranchSave = true; } }
-      else{ b = {id:uid(), name, username, password:'1234', staff:[]}; state.branches.push(b); needsBranchSave = true; }
+      else{ b = {id:'br-'+username, name, username, password:'1234', staff:[]}; state.branches.push(b); needsBranchSave = true; }
       return b;
     });
     const order = [...plan, ...state.branches.filter(b=>!plan.includes(b))];
@@ -4458,6 +4515,7 @@ async function loadAll(){
     while(usedUsernames.has(b.username)){ b.username = base + (n++); needsBranchSave = true; }
     usedUsernames.add(b.username);
   });
+  if(driveReady || backendMode()==='offline'){ if(dedupeBranches()) needsBranchSave = true; }
   const fallbackBranchId = state.branches[0].id;
   state.repairs.forEach(r=>{ if(!r.branchId){ r.branchId = fallbackBranchId; needsRepairSave = true; } });
   state.repairs.forEach(r=>{ if(r.status==='تم التسليم' && !r.deliveredAt){ r.deliveredAt = r.updatedAt || r.createdAt; needsRepairSave = true; } });
@@ -7967,7 +8025,7 @@ function renderCountSheet(c){
   const plus = diffs.reduce((s,l)=>s+Math.max(0,Number(val(l))-Number(l.sys)),0);
   const minus = diffs.reduce((s,l)=>s+Math.min(0,Number(val(l))-Number(l.sys)),0);
   const shown = lines.slice(0, 800);
-  const lineEdit = !posted && c.status!=='cancelled' && canManageStock();
+  const lineEdit = (editingPosted || (!posted && c.status!=='cancelled')) && canManageStock();
   return `
     <div class="toolbar">
       <button class="btn" onclick="if(countEditId && Object.keys(countEdits).length && !confirm(TT('تطلع بدون حفظ التعديلات؟','Leave without saving your changes?'))) return; countOpenId=null; countEditId=null; countEdits={}; render();">← ${TT('رجوع','Back')}</button>
@@ -8007,7 +8065,7 @@ function renderCountSheet(c){
         <thead><tr><th>BIN</th><th>${T('colCode')}</th><th>${T('colBrand')}</th><th>${TT('الموديل','Model')}</th><th>${TT('القطعة','Part')}</th><th>${TT('كمية السستم','System qty')}</th><th>${TT('الكمية الفعلية','Counted')}</th><th>${TT('الفرق','Diff')}</th></tr></thead>
         <tbody>${shown.map(l=>{ const v = val(l); const d = has(v) ? Number(v)-Number(l.sys) : null;
           return `<tr class="${d?'low-stock':''}">
-            <td>${binBadge(l.bin)||'<span style="color:var(--muted)">-</span>'}</td><td class="mono">${editCell(invAttr(l.code), `editCountLineField('${c.id}','${invAttr(l.key)}','code')`, lineEdit && l.code!=='-')}</td><td>${editCell(invAttr(l.brand||'-'), `editCountLineField('${c.id}','${invAttr(l.key)}','brand')`, lineEdit)}</td><td><bdi>${editCell(invAttr(l.model||'-'), `editCountLineField('${c.id}','${invAttr(l.key)}','model')`, lineEdit)}</bdi></td>
+            <td>${binBadge(l.bin)||'<span style="color:var(--muted)">-</span>'}</td><td class="mono">${editCell(invAttr(l.code), `editCountLineField('${c.id}','${invAttr(l.key)}','code')`, lineEdit)}</td><td>${editCell(invAttr(l.brand||'-'), `editCountLineField('${c.id}','${invAttr(l.key)}','brand')`, lineEdit)}</td><td><bdi>${editCell(invAttr(l.model||'-'), `editCountLineField('${c.id}','${invAttr(l.key)}','model')`, lineEdit)}</bdi></td>
             <td>${editCell(invAttr(l.name||''), `editCountLineField('${c.id}','${invAttr(l.key)}','name')`, lineEdit)}${l.nameAr&&l.nameAr!==l.name?`<div style="font-size:12px;color:var(--muted);">${invAttr(l.nameAr)}</div>`:''}${l.extra?` <span class="status-badge badge-quote-pending" style="font-size:10px;">${TT('مو بالأصناف','Not in catalog')}</span>`:''}${l.fresh?` <span class="status-badge" style="font-size:10px;">${TT('ما انعدّت بالجرد','Not in the count')}</span>`:''}${l.added?` <span class="status-badge" style="font-size:10px;">${TT('أُضيفت بالتعديل','Added in edit')}</span>`:''}</td>
             <td class="mono">${l.sys}</td>
             <td>${editable?`<input class="cnt-in mono" type="number" min="0" inputmode="numeric" style="width:90px;" data-k="${invAttr(l.key)}" data-c="${c.id}" value="${has(v)?v:''}">`:`<span class="mono">${has(v)?v:'-'}</span>`}</td>
@@ -8161,12 +8219,12 @@ function fillPartFromCatalog(){
 function catalogCodeDatalist(){
   return `<datalist id="catCodeList">${(state.partsCatalog||[]).map(c=>`<option value="${invAttr(c.code)}">${invAttr([c.brand,c.model,c.nameEn||c.nameAr].filter(Boolean).join(' · '))}</option>`).join('')}</datalist>`;
 }
-Object.assign(STR.ar, {auditActionCatalog:'الأصناف', auditActionCount:'الجرد', auditActionWriteOff:'شطب مبالغ'});
-Object.assign(STR.en, {auditActionCatalog:'Items catalog', auditActionCount:'Stock count', auditActionWriteOff:'Write-off'});
+Object.assign(STR.ar, {auditActionCatalog:'الأصناف', auditActionCount:'الجرد', auditActionWriteOff:'شطب مبالغ', auditActionBranchMerge:'دمج فرع مكرر'});
+Object.assign(STR.en, {auditActionCatalog:'Items catalog', auditActionCount:'Stock count', auditActionWriteOff:'Write-off', auditActionBranchMerge:'Duplicate branch merged'});
 Object.assign(AUDIT_ACTION_LABELS, {stock_reset:'auditActionStockReset'});
 Object.assign(STR.ar, {auditActionStockReset:'تصفير كميات المخزون'});
 Object.assign(STR.en, {auditActionStockReset:'Stock quantities reset'});
-Object.assign(AUDIT_ACTION_LABELS, {catalog_add:'auditActionCatalog', catalog_edit:'auditActionCatalog', catalog_delete:'auditActionCatalog', catalog_import:'auditActionCatalog', stock_count:'auditActionCount', write_off:'auditActionWriteOff'});
+Object.assign(AUDIT_ACTION_LABELS, {catalog_add:'auditActionCatalog', catalog_edit:'auditActionCatalog', catalog_delete:'auditActionCatalog', catalog_import:'auditActionCatalog', stock_count:'auditActionCount', write_off:'auditActionWriteOff', branch_merge:'auditActionBranchMerge'});
 ICONS.items = '<path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="2"/>';
 ICONS.count = '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3v3h6V3"/><path d="m9 13 2 2 4-4"/>';
 
