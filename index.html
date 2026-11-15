@@ -1534,18 +1534,20 @@ const APPR_TYPES = {
   countEdit:{ar:'طلب تعديل جرد', en:'Count edit request', c:'#d97706', ic:'edit'},
   transfer: {ar:'طلب تحويل قطع', en:'Part transfer request', c:'#0891b2', ic:'transfer'},
   partReq:  {ar:'طلب قطعة لجوب', en:'Part request for a job', c:'#dc2626', ic:'box'},
+  partAdd:  {ar:'طلب إضافة قطعة من فرع', en:'Branch part-add request', c:'#16a34a', ic:'plus'},
 };
 function apprLabel(k){ const t = APPR_TYPES[k]; return t ? (lang==='ar'?t.ar:t.en) : k; }
 function approvalItems(kind){
   const admin = authRole==='admin', wh = authRole==='warehouse';
   if(!admin && !wh) return [];
-  const out = {swap:[], count:[], countEdit:[], transfer:[], partReq:[]};
+  const out = {swap:[], count:[], countEdit:[], transfer:[], partReq:[], partAdd:[]};
   if(admin) out.swap = (state.repairs||[]).filter(r=>!isClosedStatus(r.status) && swapNeedsApproval(r) && (r.vocStatus||'pending')==='pending')
     .sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt));
   out.count = (state.stockCounts||[]).filter(c=>c.status==='submitted').sort((a,b)=>String(a.submittedAt||a.createdAt).localeCompare(String(b.submittedAt||b.createdAt)));
   if(admin) out.countEdit = (state.stockCounts||[]).filter(c=>c.status==='posted' && c.pendingEdit).sort((a,b)=>String(a.pendingEdit.at).localeCompare(String(b.pendingEdit.at)));
   out.transfer = (state.transfers||[]).filter(t=>t.status==='pending' && canApproveTransfer(t)).sort((a,b)=>String(a.requestedAt||'').localeCompare(String(b.requestedAt||'')));
   out.partReq = (typeof openPartRequests==='function') ? openPartRequests() : [];
+  out.partAdd = (state.inventory||[]).filter(p=>p.pendingAdd).sort((a,b)=>String(a.pendingAdd.at).localeCompare(String(b.pendingAdd.at)));
   return kind ? (out[kind]||[]) : out;
 }
 function approvalsTotal(){ const a = approvalItems(); return Object.values(a).reduce((s,l)=>s+l.length,0); }
@@ -1618,6 +1620,17 @@ function apprCard(kind, x){
       <div class="appr-act">
         <button class="btn btn-primary" onclick="apprDo(()=>approveTransfer('${t.id}'))">${icon('check')} ${TT('موافقة وإرسال','Approve & send')}</button>
         <button class="btn btn-danger" onclick="apprDo(()=>rejectTransfer('${t.id}'))">${TT('رفض','Reject')}</button></div></div>`;
+  }
+  if(kind==='partAdd'){
+    const p = x, pa = p.pendingAdd;
+    return `<div class="appr-card">
+      <div class="appr-top"><b>${E(p.name)}</b> <span class="mono" style="color:var(--muted)">${E(p.code||'')}</span> <span style="flex:1"></span><b>+${pa.qty}</b></div>
+      ${apprRow(TT('الفرع','Branch'), E(locName(p.branchId)))}${apprRow(TT('الماركة / الموديل','Brand / model'), E([p.brand,p.model].filter(Boolean).join(' ')))}
+      ${apprRow(TT('النوع','Type'), E(p.partType||''))}${apprRow(TT('الحالة','Status'), pa.isNew?TT('قطعة جديدة على مخزن الفرع','New item for this branch'):`${TT('موجودة، الكمية الحالية','Existing, current qty')}: ${p.qty}`)}
+      ${apprRow('BIN', E(p.bin||''))}${apprRow(TT('السبب','Reason'), E(pa.reason||''))}${apprRow(TT('طلبه','Requested by'), E(pa.by||''))}${apprRow(TT('التاريخ','Date'), fmtDateTime(pa.at))}
+      <div class="appr-act">
+        <button class="btn btn-primary" onclick="apprDo(()=>approvePartAdd('${p.id}'))">${icon('check')} ${TT('موافقة وإضافة','Approve & add')}</button>
+        <button class="btn btn-danger" onclick="apprDo(()=>rejectPartAdd('${p.id}'))">${TT('رفض','Reject')}</button></div></div>`;
   }
   if(kind==='partReq'){
     const r = x, pr = r.partReq;
@@ -5958,7 +5971,7 @@ function renderInventory(){
       ${authRole!=='branch' ? `<button class="btn" onclick="invForecastOpen=true;render();">${icon('reports')} ${TT('توقع طلب القطع','Parts forecast')}</button>` : ''}
       ${authRole==='branch' ? `<button class="btn" onclick="setPage('transfers')">${icon('transfer')} ${T('requestFromMainBtn')}</button>` : ''}
       ${authRole==='admin'?`<button class="btn" style="border-color:var(--red);color:var(--red);" onclick="resetInventoryQty()">${icon('del')} ${TT('تصفير الكميات','Reset quantities')}</button>`:''}
-      ${manage?`<button class="btn btn-primary" onclick="openPartModal()">${icon('plus')} ${T('addPart')}</button>`:''}
+      ${manage?`<button class="btn btn-primary" onclick="openPartModal()">${icon('plus')} ${T('addPart')}</button>`:authRole==='branch'?`<button class="btn btn-primary" onclick="openPartModal()">${icon('plus')} ${T('addPart')}</button>`:''}
       ${manage?`<button class="btn" onclick="openBulkThresholdModal()" title="${TT('تحديد متى تعتبر القطعة منخفضة','Set when a part counts as low stock')}">${icon('edit')} ${TT('حد النقص','Low-stock limit')}</button>`:''}
     </div>
     ${authRole==='branch'?`<p style="font-size:12px;color:var(--muted);margin:-6px 0 12px;">${TT('كميات الفرع تتغير بس عن طريق الجوبات واستلام التحويلات. لتصحيح كمية تواصل ويه المدير أو المخزن الرئيسي.','Branch quantities change only through jobs and received transfers. To correct a quantity, contact the admin or the main warehouse.')}</p>`:''}
@@ -5972,7 +5985,7 @@ function renderInventory(){
               <td>${branchName(p.branchId)}</td>
               <td class="mono">${editCell(p.code||'-', `editPartField('${p.id}','code')`, manage && !p.defective)}</td>
               ${canEditBin(p)?`<td class="bin-cell" title="${TT('اضغط لتعديل الـ BIN','Click to edit BIN')}" onclick="setPartBin('${p.id}')">${binBadge(p.bin)||`<span class="bin-empty">+ BIN</span>`}</td>`:`<td>${binBadge(p.bin)||'<span style="color:var(--muted)">-</span>'}</td>`}
-              <td>${editCell(p.name, `editPartField('${p.id}','name')`, manage && !p.defective)}${(p.partType && !p.defective)?` <span class="status-badge badge-branch" style="font-size:10.5px;">${p.partType}</span>`:''}${p.defective?` <span class="status-badge badge-defective">${TT('عاطل','Defective')}</span>`:''}${(!p.defective && p.qty<=p.threshold)?` <span class="status-badge status-1">${T('lowBadge')}</span>`:''}${(p.defective && (p.imeis||[]).length)?`<div style="font-size:11px;color:var(--muted);" class="mono">IMEI: ${(p.imeis||[]).slice(0,4).join('، ')}${(p.imeis||[]).length>4?' …':''}</div>`:''}</td>
+              <td>${editCell(p.name, `editPartField('${p.id}','name')`, manage && !p.defective)}${p.pendingAdd?` <span class="status-badge" style="font-size:10.5px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;">${TT('طلب إضافة','Add request')} +${p.pendingAdd.qty} · ${TT('بانتظار الموافقة','awaiting approval')}</span>`:''}${(p.partType && !p.defective)?` <span class="status-badge badge-branch" style="font-size:10.5px;">${p.partType}</span>`:''}${p.defective?` <span class="status-badge badge-defective">${TT('عاطل','Defective')}</span>`:''}${(!p.defective && p.qty<=p.threshold)?` <span class="status-badge status-1">${T('lowBadge')}</span>`:''}${(p.defective && (p.imeis||[]).length)?`<div style="font-size:11px;color:var(--muted);" class="mono">IMEI: ${(p.imeis||[]).slice(0,4).join('، ')}${(p.imeis||[]).length>4?' …':''}</div>`:''}</td>
               <td>${editCell(p.brand||'-', `editPartField('${p.id}','brand')`, manage && !p.defective)}${(p.model||(manage&&!p.defective))?`<div style="font-size:11.5px;color:var(--muted);">${editCell(p.model||TT('+ موديل','+ model'), `editPartField('${p.id}','model')`, manage && !p.defective)}</div>`:''}</td>
               <td class="mono">
                 ${manage?`<button class="btn btn-sm" onclick="adjustQty('${p.id}',-1)">−</button>`:''}
@@ -6061,6 +6074,7 @@ function deletePart(id){
   render();
 }
 function savePart(id){
+  if(authRole==='branch' && !id) return saveBranchPartRequest();
   if(!canManageStock()){ alert(T('alertNoPermission')); return; }
   const existingPart = id ? state.inventory.find(p=>p.id===id) : null;
   const branchId = canManageStock() && document.getElementById('p_branch') ? document.getElementById('p_branch').value : (existingPart ? existingPart.branchId : MAIN_WH_ID);
@@ -7006,13 +7020,15 @@ function removeModalSoftware(i){ modalSoftware.splice(i,1); renderModalParts(); 
 
 /* ---------- part form (admin / warehouse): brand, model and type from lists ---------- */
 function openPartModal(id){
-  if(!canManageStock()){ alert(T('alertNoPermission')); return; }
+  const isBr = authRole==='branch';
+  if(!canManageStock() && !(isBr && !id)){ alert(T('alertNoPermission')); return; }
   const editing = id ? state.inventory.find(p=>p.id===id) : null;
-  const curBranch = editing ? editing.branchId : (authRole==='warehouse' ? MAIN_WH_ID : (state.currentBranch!=='all' ? state.currentBranch : MAIN_WH_ID));
+  const curBranch = isBr ? state.authBranchId : editing ? editing.branchId : (authRole==='warehouse' ? MAIN_WH_ID : (state.currentBranch!=='all' ? state.currentBranch : MAIN_WH_ID));
   const brands = catalogBrands(); const cb = editing ? (editing.brand||'') : '';
   if(cb && !brands.includes(cb)) brands.unshift(cb);
   showModal(`
     <h3>${editing?T('editPartTitle'):T('newPartTitle')}</h3>
+    ${isBr?`<p style="font-size:12.5px;color:#92400e;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px 10px;margin:-4px 0 10px;">${TT('الإضافة تروح طلب للمدير / المخزن الرئيسي، والكمية تدخل مخزن الفرع بعد الموافقة. إذا الكود موجود أصلاً بمخزنك، الكمية تنضاف عليه.','The addition is sent as a request to the admin / main warehouse; the quantity enters the branch stock after approval. If the code already exists in your stock, the quantity is added to it.')}</p>`:''}
     <div class="form-row"><label>${T('branchLabel')}</label>
       ${canManageStock() ? `<select id="p_branch"><option value="${MAIN_WH_ID}" ${curBranch===MAIN_WH_ID?'selected':''}>${T('mainWarehouse')}</option>${state.branches.map(b=>`<option value="${b.id}" ${curBranch===b.id?'selected':''}>${b.name}</option>`).join('')}</select>`
         : `<input value="${branchName(curBranch)}" disabled>`}
@@ -7030,6 +7046,7 @@ function openPartModal(id){
       <div class="form-row"><label>${T('qty')}</label><input id="p_qty" type="number" value="${editing?editing.qty:0}"></div>
       <div class="form-row"><label>${T('lowStockThreshold')}</label><input id="p_threshold" type="number" value="${editing?editing.threshold:3}"></div>
     </div>
+    ${isBr?`<div class="form-row"><label>${TT('سبب الإضافة','Reason')}</label><input id="p_reason" placeholder="${TT('مثال: قطعة موجودة بالفرع وما مسجلة','e.g. part on hand but not registered')}"></div>`:''}
     <div class="form-row"><label>BIN Code <span style="font-weight:400;color:var(--muted);font-size:12px;">${TT('(مكان القطعة بالرف، مثال A-03-02)','(shelf location, e.g. A-03-02)')}</span></label><input id="p_bin" class="mono" style="text-transform:uppercase;" value="${editing?invAttr(editing.bin||''):''}" placeholder="A-03-02"></div>
     <div class="form-2col">
       <div class="form-row"><label>${T('buyPrice')}</label><input id="p_cost" type="text" inputmode="numeric" class="money-in" onblur="this.value=fmtIQDInput(this.value)" value="${editing&&editing.costPrice?money(editing.costPrice):''}"></div>
@@ -7588,6 +7605,49 @@ function stockByCode(code){
     const q = Number(p.qty)||0; out.total += q; out.at[p.branchId] = (out.at[p.branchId]||0) + q;
   }
   return out;
+}
+
+/* ---------- branches add parts: request → admin / main warehouse approval ---------- */
+function saveBranchPartRequest(){
+  const branchId = state.authBranchId; if(authRole!=='branch' || !branchId) return;
+  const g = id=>((document.getElementById(id)||{}).value||'').trim();
+  const code = g('p_code'), brand = g('p_brand'), partType = g('p_type'), model = g('p_model'), bin = normBin(g('p_bin')), reason = g('p_reason');
+  let name = g('p_name');
+  const qty = Math.floor(Number(latinDigits(g('p_qty')))||0);
+  if(!partType){ alert(TT('اختار نوع القطعة','Choose the part type')); return; }
+  if(!name) name = [partType, brand, model].filter(Boolean).join(' ');
+  if(qty<=0){ alert(TT('اكتب الكمية (أكثر من صفر).','Enter a quantity above zero.')); return; }
+  const now = new Date().toISOString(), by = currentActorName();
+  let row = code ? state.inventory.find(p=>p.branchId===branchId && !p.defective && normCode(p.code)===normCode(code)) : null;
+  if(row && row.pendingAdd){ alert(TT(`أكو طلب إضافة على ${row.name} بانتظار الموافقة.`, `There is already an add request for ${row.name} awaiting approval.`)); return; }
+  if(row){ row.pendingAdd = {qty, by, at:now, reason, isNew:false}; if(bin && !row.bin) row.bin = bin; }
+  else{
+    row = newStockItem({branchId, code, name, brand, partType, model, threshold:Number(g('p_threshold'))||0, costPrice:parseIQD(g('p_cost')), sellPrice:parseIQD(g('p_sell')), bin}, 0);
+    row.pendingAdd = {qty, by, at:now, reason, isNew:true};
+  }
+  logAudit('stock_add', authRole, by, `${TT('طلب إضافة قطعة','Part add requested')}: ${row.name} ×${qty} (${locName(branchId)})${reason?' · '+reason:''}`);
+  saveInventory(); closeModal(); render();
+  alert(TT('انرسل طلب الإضافة. الكمية تدخل مخزنك بعد موافقة المدير أو المخزن الرئيسي.','The add request was sent. The quantity enters your stock after approval.'));
+}
+function approvePartAdd(id){
+  if(!canManageStock()){ alert(T('alertNoPermission')); return; }
+  const row = state.inventory.find(p=>p.id===id); if(!row || !row.pendingAdd) return;
+  const pa = row.pendingAdd;
+  if(!confirm(TT(`موافقة على إضافة ${row.name} ×${pa.qty} لمخزن ${locName(row.branchId)}؟`, `Approve adding ${row.name} ×${pa.qty} to ${locName(row.branchId)}?`))) return;
+  addMove(row.id, pa.qty, 'add');
+  logAudit('stock_add', authRole, currentActorName(), `${TT('موافقة على إضافة قطعة','Part add approved')}: ${row.name} ×${pa.qty} (${locName(row.branchId)}) · ${TT('طلب','requested by')} ${pa.by}`);
+  delete row.pendingAdd; row.addApprovedBy = currentActorName(); row.updatedAt = new Date().toISOString();
+  saveStockMoves(); saveInventory(); render();
+}
+function rejectPartAdd(id){
+  if(!canManageStock()){ alert(T('alertNoPermission')); return; }
+  const row = state.inventory.find(p=>p.id===id); if(!row || !row.pendingAdd) return;
+  const reason = prompt(TT('سبب الرفض (اختياري):','Reason for rejecting (optional):'), ''); if(reason===null) return;
+  const pa = row.pendingAdd;
+  logAudit('stock_add', authRole, currentActorName(), `${TT('رفض إضافة قطعة','Part add rejected')}: ${row.name} ×${pa.qty} (${locName(row.branchId)})${reason?' · '+reason:''}`);
+  if(pa.isNew && !(Number(row.qty)||0)) state.inventory = state.inventory.filter(p=>p.id!==id);
+  else { delete row.pendingAdd; row.lastAddRejected = {at:new Date().toISOString(), by:currentActorName(), reason}; }
+  saveInventory(); render();
 }
 function saveCatalog(){ return queueSave('partsCatalog'); }
 function saveCounts(){ return queueSave('stockCounts'); }
