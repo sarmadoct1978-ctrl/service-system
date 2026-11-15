@@ -1532,7 +1532,7 @@ const APPR_TYPES = {
   swap:     {ar:'موافقة سواب / VOC', en:'SWAP / VOC approval', c:'#7c3aed', ic:'swap'},
   count:    {ar:'جرد بانتظار الاعتماد', en:'Stock count to post', c:'#2563eb', ic:'count'},
   countEdit:{ar:'طلب تعديل جرد', en:'Count edit request', c:'#d97706', ic:'edit'},
-  transfer: {ar:'طلب تحويل قطع', en:'Part transfer request', c:'#0891b2', ic:'transfer'},
+  transfer: {ar:'طلب تحويل / إرجاع قطع', en:'Transfer / return request', c:'#0891b2', ic:'transfer'},
   partReq:  {ar:'طلب قطعة لجوب', en:'Part request for a job', c:'#dc2626', ic:'box'},
   partAdd:  {ar:'طلب إضافة قطعة من فرع', en:'Branch part-add request', c:'#16a34a', ic:'plus'},
 };
@@ -1616,6 +1616,7 @@ function apprCard(kind, x){
       <div class="appr-top"><b>${E(t.name)}</b> <span class="mono" style="color:var(--muted)">${E(t.code||'')}</span> <span style="flex:1"></span><b>×${t.qty}</b></div>
       ${apprRow(TT('من','From'), E(locName(t.fromBranchId)))}${apprRow(TT('إلى','To'), E(locName(t.toBranchId)))}
       ${apprRow(TT('المتوفر بالمرسل','Available at sender'), item?item.qty:'-')}${apprRow(TT('طلبه','Requested by'), E(t.requestedBy||''))}
+      ${t.kind==='return'?apprRow(TT('النوع','Type'), `<span style="color:#b45309">↩️ ${TT('إرجاع من فرع','Return from branch')}: ${returnReasonLabel(t.returnReason)}${t.forwardTo?` → ${E(branchName(t.forwardTo))}`:''}</span>`):''}
       ${apprRow(TT('التاريخ','Date'), t.requestedAt?fmtDateTime(t.requestedAt):'')}${apprRow(TT('الجوب','Job'), E(t.jobNo||''))}${apprRow(TT('ملاحظة','Note'), E(t.note||''))}
       <div class="appr-act">
         <button class="btn btn-primary" onclick="apprDo(()=>approveTransfer('${t.id}'))">${icon('check')} ${TT('موافقة وإرسال','Approve & send')}</button>
@@ -2211,12 +2212,74 @@ let transferSearch = '';
 let transferRequestItem = null;
 
 function canApproveTransfer(t){
+  if(t && t.kind==='return') return authRole==='admin';   // a branch sending stock back / to another centre needs the admin
   return authRole==='admin' || authRole==='warehouse';   // sending stock out is never done by a branch
 }
 function canReceiveTransfer(t){
   if(authRole==='admin') return true;
   if(authRole==='warehouse') return t.toBranchId===MAIN_WH_ID;
   return authRole==='branch' && t.toBranchId===state.authBranchId;
+}
+
+/* ---------- branch → main warehouse: return (damaged) or forward to another centre, with a reason; admin approves ---------- */
+const RETURN_REASONS = [['damaged','تالف','Damaged'],['forward','تحويل لمركز ثاني (عن طريق المخزن)','Forward to another centre (via warehouse)'],['excess','زايد عن الحاجة','Surplus'],['wrong','قطعة غلط / مو مطابقة','Wrong / not matching part'],['other','سبب آخر','Other']];
+function returnReasonLabel(k){ const r = RETURN_REASONS.find(x=>x[0]===k); return r ? TT(r[1], r[2]) : (k||''); }
+let returnItem = null;
+function openReturnModal(invId){
+  if(authRole!=='branch'){ alert(T('alertNoPermission')); return; }
+  const item = state.inventory.find(x=>x.id===invId);
+  if(!item || item.branchId!==state.authBranchId) return;
+  if((Number(item.qty)||0)<=0){ alert(TT('ماكو كمية من هذي القطعة بمخزنك.','You have no stock of this part.')); return; }
+  returnItem = item;
+  showModal(`
+    <h3>↩️ ${TT('إرجاع / تحويل للمخزن الرئيسي','Return / send to main warehouse')}</h3>
+    <p style="font-size:13px;color:var(--muted);margin-top:-6px;">${rdEsc(item.name)} (${rdEsc(item.code||'-')}) — ${T('available')}: ${item.qty}</p>
+    <div class="form-row"><label>${TT('سبب الإرجاع','Reason')}</label><select id="rt_reason" onchange="document.getElementById('rt_fwd_row').style.display=this.value==='forward'?'':'none'">${RETURN_REASONS.map(r=>`<option value="${r[0]}">${TT(r[1],r[2])}</option>`).join('')}</select></div>
+    <div class="form-row" id="rt_fwd_row" style="display:none"><label>${TT('المركز المقصود','Destination centre')}</label><select id="rt_fwd">${state.branches.filter(b=>b.id!==item.branchId).map(b=>`<option value="${b.id}">${rdEsc(b.name)}</option>`).join('')}</select></div>
+    <div class="form-row"><label>${T('transferQty')}</label><input id="rt_qty" type="number" min="1" max="${item.qty}" value="1"></div>
+    <div class="form-row"><label>${TT('تفاصيل السبب','Details')}</label><textarea id="rt_note" rows="2" placeholder="${TT('مثال: الشاشة مكسورة من الشحنة','e.g. screen arrived cracked')}"></textarea></div>
+    <p style="font-size:12px;color:var(--muted);">${TT('الطلب يروح للمدير. بعد موافقته تنخصم الكمية من مخزنك، وتنضاف للمخزن الرئيسي من يأكد الاستلام.','The request goes to the admin. After approval the quantity leaves your stock and is added to the main warehouse when it confirms receipt.')}</p>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="createReturnRequest()">${icon('transfer')} ${TT('إرسال الطلب','Send request')}</button>
+      <button class="btn" onclick="closeModal()">${T('cancel')}</button></div>`);
+}
+function createReturnRequest(){
+  const item = returnItem; if(!item || authRole!=='branch') return;
+  const qty = Math.floor(Number(latinDigits(document.getElementById('rt_qty').value))||0);
+  const reason = document.getElementById('rt_reason').value;
+  const note = document.getElementById('rt_note').value.trim();
+  const forwardTo = reason==='forward' ? document.getElementById('rt_fwd').value : '';
+  if(qty<=0 || qty>(Number(item.qty)||0)){ alert(T('alertTransferQty')); return; }
+  if((reason==='other' || reason==='damaged') && !note){ alert(TT('اكتب تفاصيل السبب.','Please write the details.')); return; }
+  const now = new Date().toISOString();
+  const t = { id: uid(), itemId: item.id, code: item.code, name: item.name, brand: item.brand||'', partType: item.partType||'', model: item.model||'', costPrice: item.costPrice, sellPrice: item.sellPrice, defective: item.defective?true:undefined,
+    qty, fromBranchId: item.branchId, toBranchId: MAIN_WH_ID, status:'pending', kind:'return', returnReason: reason, forwardTo, note, requestedBy: currentActorName(), requestedAt: now };
+  state.transfers.push(t);
+  logAudit('transfer_request', authRole, currentActorName(), `${TT('طلب إرجاع للمخزن الرئيسي','Return to main requested')}: ${item.name} x${qty} (${locName(item.branchId)}) · ${returnReasonLabel(reason)}${forwardTo?' → '+branchName(forwardTo):''}${note?' · '+note:''}`);
+  saveTransfers(); returnItem = null; closeModal(); render();
+  alert(TT('انرسل طلب الإرجاع للمدير.','The return request was sent to the admin.'));
+}
+/* ---------- admin: delete a transfer and put the quantity back with the sender ---------- */
+function deleteTransfer(id){
+  if(authRole!=='admin'){ alert(T('alertNoPermission')); return; }
+  const t = state.transfers.find(x=>x.id===id); if(!t) return;
+  const moves = (state.stockMoves||[]).filter(m=>m.ref==='tr:'+t.id);
+  const outMove = moves.find(m=>m.d<0), inMove = moves.find(m=>m.d>0);
+  const dest = inMove ? state.inventory.find(x=>x.id===inMove.invId) : null;
+  const usedWarn = dest && (Number(dest.qty)||0) < t.qty ? TT(`\n⚠️ مخزن ${locName(t.toBranchId)} بيه هسه ${dest.qty} بس، فكميته راح تصير بالسالب (يعني القطعة انصرفت).`, `\n⚠️ ${locName(t.toBranchId)} now has only ${dest.qty}, so its stock will go negative (the part was used).`) : '';
+  const what = inMove ? TT(`الكمية (${t.qty}) تنخصم من ${locName(t.toBranchId)} وترجع لـ ${locName(t.fromBranchId)}.`, `${t.qty} will be taken from ${locName(t.toBranchId)} and returned to ${locName(t.fromBranchId)}.`)
+    : outMove ? TT(`الكمية (${t.qty}) ترجع لـ ${locName(t.fromBranchId)}.`, `${t.qty} will be returned to ${locName(t.fromBranchId)}.`)
+    : TT('ما صار خصم من المخزون بعد، فبس ينمسح الطلب.','No stock moved yet; only the request is removed.');
+  if(!confirm(TT(`مسح التحويل: ${t.name} ×${t.qty} (${locName(t.fromBranchId)} → ${locName(t.toBranchId)})\n${what}${usedWarn}\n\nمتأكد؟`, `Delete transfer: ${t.name} ×${t.qty} (${locName(t.fromBranchId)} → ${locName(t.toBranchId)})\n${what}${usedWarn}\n\nSure?`))) return;
+  const ref = 'trdel:'+t.id;
+  if(inMove){ addMove(inMove.invId, -inMove.d, 'transfer_delete', ref, 'trDR_'+t.id);
+    if(dest && t.defective && (t.imeis||[]).length) dest.imeis = (dest.imeis||[]).filter(i=>!t.imeis.includes(i)); }
+  if(outMove){ addMove(outMove.invId, -outMove.d, 'transfer_delete', ref, 'trDS_'+t.id);
+    const src = state.inventory.find(x=>x.id===outMove.invId); if(src && t.defective && (t.imeis||[]).length) src.imeis = [...(src.imeis||[]), ...t.imeis]; }
+  state.transfers = state.transfers.filter(x=>x.id!==t.id);
+  logAudit('transfer_delete', authRole, currentActorName(), `${TT('مسح تحويل وإرجاع الكمية للمرسل','Transfer deleted, quantity returned to sender')}: ${t.name} x${t.qty} (${locName(t.fromBranchId)} → ${locName(t.toBranchId)}) · ${TT('كانت الحالة','status was')}: ${t.status}`);
+  if(inMove || outMove){ saveStockMoves(); saveInventory(); }
+  saveTransfers(); render();
 }
 function rejectTransfer(id){
   const t = state.transfers.find(x=>x.id===id);
@@ -2232,7 +2295,7 @@ function rejectTransfer(id){
 function cancelTransferRequest(id){
   const t = state.transfers.find(x=>x.id===id);
   if(!t || t.status!=='pending') return;
-  if(!(authRole==='admin' || authRole==='warehouse' || (authRole==='branch' && t.toBranchId===state.authBranchId))){ alert(T('alertNoPermission')); return; }
+  if(!(authRole==='admin' || authRole==='warehouse' || (authRole==='branch' && (t.toBranchId===state.authBranchId || (t.kind==='return' && t.fromBranchId===state.authBranchId))))){ alert(T('alertNoPermission')); return; }
   if(!confirm(T('confirmCancelTransfer'))) return;
   t.status = 'cancelled';
   t.cancelledAt = new Date().toISOString();
@@ -2465,15 +2528,16 @@ function renderTransfers(){
           <tbody>
             ${all.map(t=>`
               <tr>
-                <td>${t.name} <span class="mono" style="color:var(--muted);">(${t.code})</span></td>
+                <td>${t.name} <span class="mono" style="color:var(--muted);">(${t.code})</span>${t.kind==='return'?`<div style="font-size:11.5px;color:#b45309;margin-top:2px;">↩️ ${TT('إرجاع','Return')}: ${returnReasonLabel(t.returnReason)}${t.forwardTo?` → ${branchName(t.forwardTo)}`:''}${t.note?` · ${rdEsc(t.note)}`:''}</div>`:''}</td>
                 <td class="mono">${t.qty}</td>
-                <td>${branchName(t.fromBranchId)}</td>
-                <td>${branchName(t.toBranchId)}</td>
+                <td>${locName(t.fromBranchId)}</td>
+                <td>${locName(t.toBranchId)}</td>
                 <td class="mono" style="font-size:12px;">${t.jobNo||'-'}</td>
                 <td>${transferStatusBadge(t)}${t.direct?` <span class="status-badge badge-branch">${T('directLabel')}</span>`:''}</td>
                 <td>
                   ${t.status==='in_transit' && canReceiveTransfer(t) ? `<button class="btn btn-sm btn-primary" onclick="confirmReceiptTransfer('${t.id}')">${icon('check')} ${T('confirmReceiptBtn')}</button>` : ''}
-                  ${t.status==='pending' && (authRole==='admin' || authRole==='warehouse' || t.toBranchId===myBranchId) ? `<button class="btn btn-sm btn-danger" onclick="cancelTransferRequest('${t.id}')">${icon('del')} ${T('cancelBtn')}</button>` : ''}
+                  ${t.status==='pending' && (authRole==='admin' || authRole==='warehouse' || t.toBranchId===myBranchId || (t.kind==='return' && t.fromBranchId===myBranchId)) ? `<button class="btn btn-sm btn-danger" onclick="cancelTransferRequest('${t.id}')">${icon('del')} ${T('cancelBtn')}</button>` : ''}
+                  ${authRole==='admin' ? `<button class="btn btn-sm" style="color:var(--red,#ef4444);border-color:var(--red,#ef4444)" title="${TT('مسح التحويل وإرجاع الكمية للمرسل','Delete transfer and return the quantity to the sender')}" onclick="deleteTransfer('${t.id}')">${icon('del')} ${TT('مسح','Delete')}</button>` : ''}
                 </td>
               </tr>
             `).join('')}
@@ -3795,6 +3859,11 @@ function dedupeBranches(){
       (d.staff||[]).forEach(st=>{ if(!(keep.staff||[]).some(x=>x.name===st.name)) (keep.staff = keep.staff||[]).push(st); });
       // the plain login name (erb1, bsr7...) stays usable
       const planUsers = BRANCH_PLAN.map(x=>x[1]); if(d.username && keep.username!==d.username && planUsers.includes(d.username) && !planUsers.includes(keep.username)) keep.username = d.username;
+      // the login that was changed most recently wins, so a password set on the duplicate is not lost
+      const credTs = b=> Math.max(fieldTs(b,'passwordHash'), fieldTs(b,'password'), fieldTs(b,'salt'), b.passwordHash ? 1 : 0);
+      if(credTs(d) > credTs(keep) && (d.passwordHash || d.password)){
+        ['passwordHash','salt','kdf','password'].forEach(f=>{ if(d[f]!==undefined){ keep[f] = d[f]; keep._fts = keep._fts||{}; keep._fts[f] = nowTs(); } else if(f==='password' && d.passwordHash){ delete keep.password; } });
+      }
       if(state.authBranchId===d.id) state.authBranchId = keep.id;
       state.branches = state.branches.filter(b=>b!==d);
       addDeletion('branches', d.id);
@@ -4649,6 +4718,8 @@ async function loadAll(){
     if(order.some((b,i)=>state.branches[i]!==b)){ state.branches = order; needsBranchSave = true; }
     serviceLists.branchPlan = 1; queueSave('serviceLists');
   }
+  // merge duplicate branches first, so the username check below never renames a real login (erb1 → erb11)
+  if(driveReady || backendMode()==='offline'){ if(dedupeBranches()) needsBranchSave = true; }
   const usedUsernames = new Set();
   state.branches.forEach(b=>{
     if(b.passwordHash && b.password!==undefined){ delete b.password; needsBranchSave = true; }
@@ -4664,7 +4735,6 @@ async function loadAll(){
     while(usedUsernames.has(b.username)){ b.username = base + (n++); needsBranchSave = true; }
     usedUsernames.add(b.username);
   });
-  if(driveReady || backendMode()==='offline'){ if(dedupeBranches()) needsBranchSave = true; }
   const fallbackBranchId = state.branches[0].id;
   state.repairs.forEach(r=>{ if(!r.branchId){ r.branchId = fallbackBranchId; needsRepairSave = true; } });
   state.repairs.forEach(r=>{ if(r.status==='تم التسليم' && !r.deliveredAt){ r.deliveredAt = r.updatedAt || r.createdAt; needsRepairSave = true; } });
@@ -5996,6 +6066,7 @@ function renderInventory(){
               <td class="mono">${money(p.sellPrice)}</td>
               <td style="white-space:nowrap;">
                 <button class="btn btn-sm" title="${TT('حركات المخزن','Stock movements')}" onclick="openStockHistory('${p.id}')">${icon('history')}</button>
+                ${authRole==='branch' && p.branchId===state.authBranchId && (Number(p.qty)||0)>0 ? `<button class="btn btn-sm" title="${TT('إرجاع / تحويل للمخزن الرئيسي','Return / send to main warehouse')}" onclick="openReturnModal('${p.id}')">↩️ ${TT('إرجاع','Return')}</button>` : ''}
                 ${manage ? `<button class="btn btn-sm" title="${T('directTransferBtn')}" onclick="openDirectTransferModal('${p.id}')">${icon('transfer')}</button>
                 <button class="btn btn-sm" title="${T('issueStockBtn')}" onclick="openIssueStockModal('${p.id}')">${T('issueStockShort')}</button>
                 <button class="btn btn-sm" onclick="openPartModal('${p.id}')">${icon('edit')}</button>
@@ -6009,7 +6080,7 @@ function renderInventory(){
 const MOVE_LABELS = {
   legacy:['استخدام قديم بجوب','Legacy job use'], job_use:['صرف لجوب','Used in job'], job_return:['رجوع من جوب','Returned from job'],
   transfer_out:['تحويل صادر','Transfer out'], transfer_in:['تحويل وارد','Transfer in'], issue:['صرف','Issued'], adjust:['تعديل يدوي','Manual adjust'],
-  count:['جرد / تصحيح','Count correction'], count_edit:['تعديل جرد معتمد','Approved count edited'], reset:['تصفير الكميات (المدير)','Quantities reset (admin)'], add:['إضافة','Added'], import:['استيراد إكسل','Excel import'], defective_in:['جهاز عاطل (SWAP)','Defective in (SWAP)'], defective_out:['إلغاء جهاز عاطل','Defective removed']
+  count:['جرد / تصحيح','Count correction'], count_edit:['تعديل جرد معتمد','Approved count edited'], transfer_delete:['مسح تحويل (إرجاع للمرسل)','Transfer deleted (back to sender)'], reset:['تصفير الكميات (المدير)','Quantities reset (admin)'], add:['إضافة','Added'], import:['استيراد إكسل','Excel import'], defective_in:['جهاز عاطل (SWAP)','Defective in (SWAP)'], defective_out:['إلغاء جهاز عاطل','Defective removed']
 };
 // Admin only: sets every spare-part quantity at the selected location to zero.
 // Each change is written as a stock movement ('reset') so the history stays complete.
@@ -8438,12 +8509,12 @@ function fillPartFromCatalog(){
 function catalogCodeDatalist(){
   return `<datalist id="catCodeList">${(state.partsCatalog||[]).map(c=>`<option value="${invAttr(c.code)}">${invAttr([c.brand,c.model,c.nameEn||c.nameAr].filter(Boolean).join(' · '))}</option>`).join('')}</datalist>`;
 }
-Object.assign(STR.ar, {auditActionCatalog:'الأصناف', auditActionCount:'الجرد', auditActionWriteOff:'شطب مبالغ', auditActionBranchMerge:'دمج فرع مكرر'});
-Object.assign(STR.en, {auditActionCatalog:'Items catalog', auditActionCount:'Stock count', auditActionWriteOff:'Write-off', auditActionBranchMerge:'Duplicate branch merged'});
+Object.assign(STR.ar, {auditActionCatalog:'الأصناف', auditActionCount:'الجرد', auditActionWriteOff:'شطب مبالغ', auditActionBranchMerge:'دمج فرع مكرر', auditActionTransferDelete:'مسح تحويل'});
+Object.assign(STR.en, {auditActionCatalog:'Items catalog', auditActionCount:'Stock count', auditActionWriteOff:'Write-off', auditActionBranchMerge:'Duplicate branch merged', auditActionTransferDelete:'Transfer deleted'});
 Object.assign(AUDIT_ACTION_LABELS, {stock_reset:'auditActionStockReset'});
 Object.assign(STR.ar, {auditActionStockReset:'تصفير كميات المخزون'});
 Object.assign(STR.en, {auditActionStockReset:'Stock quantities reset'});
-Object.assign(AUDIT_ACTION_LABELS, {catalog_add:'auditActionCatalog', catalog_edit:'auditActionCatalog', catalog_delete:'auditActionCatalog', catalog_import:'auditActionCatalog', stock_count:'auditActionCount', write_off:'auditActionWriteOff', branch_merge:'auditActionBranchMerge'});
+Object.assign(AUDIT_ACTION_LABELS, {catalog_add:'auditActionCatalog', catalog_edit:'auditActionCatalog', catalog_delete:'auditActionCatalog', catalog_import:'auditActionCatalog', stock_count:'auditActionCount', write_off:'auditActionWriteOff', branch_merge:'auditActionBranchMerge', transfer_delete:'auditActionTransferDelete'});
 ICONS.items = '<path d="M4 6h16M4 12h16M4 18h10"/><circle cx="19" cy="18" r="2"/>';
 ICONS.count = '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3v3h6V3"/><path d="m9 13 2 2 4-4"/>';
 
