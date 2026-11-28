@@ -565,6 +565,25 @@ tbody tr:hover{background:var(--paper);}
 #syncBar .sb{border-radius:12px;padding:10px 14px;font-size:13px;display:flex;gap:12px;align-items:center;box-shadow:0 8px 28px rgba(0,0,0,.16);line-height:1.6;}
 #syncBar .sb-warn{background:#fff7e0;color:#6b4700;border:1px solid #f2c46b;}
 #syncBar .sb-err{background:#fde8e8;color:#8f1d1d;border:1px solid #f3a5a5;}
+.bell-btn{position:relative;width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:#fff;color:#444;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.bell-btn svg{width:19px;height:19px;}
+.bell-btn:hover{background:var(--paper);}
+.bell-btn.bell-ring svg{color:var(--violet);animation:bellRing 1.6s ease-in-out 2;}
+@keyframes bellRing{0%,100%{transform:rotate(0)}15%{transform:rotate(14deg)}30%{transform:rotate(-12deg)}45%{transform:rotate(8deg)}60%{transform:rotate(-5deg)}75%{transform:rotate(2deg)}}
+.bell-badge{position:absolute;top:-4px;inset-inline-end:-4px;background:#ef4444;color:#fff;font-size:10.5px;font-weight:700;min-width:19px;height:19px;border-radius:10px;display:flex;align-items:center;justify-content:center;padding:0 5px;border:2px solid #fff;}
+.notif-list{max-height:65vh;overflow:auto;margin:4px 0 8px;}
+.notif-item{display:flex;gap:10px;padding:11px 10px;border-bottom:1px solid var(--line);cursor:pointer;border-radius:10px;}
+.notif-item:hover{background:var(--paper);}
+.notif-item.notif-new{background:#f1f0ff;}
+.notif-item.notif-pend{background:#fff7e0;border:1px solid #f2c46b;margin-bottom:6px;}
+.notif-ic{font-size:18px;line-height:1.3;}
+.notif-head{font-size:13.5px;}
+.notif-txt{font-size:13px;margin-top:2px;line-height:1.6;word-break:break-word;}
+.notif-sub{font-size:11.5px;color:var(--muted);margin-top:3px;}
+.notif-tag{font-size:11px;padding:1px 8px;border-radius:999px;font-weight:600;}
+.notif-tag.ok{background:#d1fae5;color:#065f46;}
+.notif-tag.no{background:#fee2e2;color:#991b1b;}
+#notifToast{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:3500;background:#1f2033;color:#fff;padding:12px 18px;border-radius:12px;font-size:13.5px;box-shadow:0 10px 30px rgba(0,0,0,.25);max-width:min(92vw,520px);cursor:pointer;display:none;line-height:1.6;}
 #syncChip{position:fixed;bottom:10px;left:10px;z-index:2999;font-size:11.5px;padding:5px 11px;border-radius:999px;background:#fff;border:1px solid #e3e5ee;color:#555;box-shadow:0 2px 8px rgba(0,0,0,.08);display:none;}
 html[dir="ltr"] #syncChip{left:auto;right:10px;}
 details.hist{margin-top:10px;font-size:12.5px;}
@@ -851,7 +870,7 @@ let lang = 'ar';
 const STR = {
   ar:{
     navDashboard:'لوحة التحكم', navDevices:'الأجهزة', navInventory:'المخزون', navInvoices:'الفواتير', navReports:'التقارير', navBranches:'الفروع', navAudit:'سجل التدقيق', navCallCenter:'الكول سنتر', navTransfers:'تحويل المخزون',
-    brand:'صيانة الميدان', brandSub:'نظام إدارة الصيانة', version:'إصدار v2026.11.26c', loading:'جارِ التحميل...',
+    brand:'صيانة الميدان', brandSub:'نظام إدارة الصيانة', version:'إصدار v2026.11.28', loading:'جارِ التحميل...',
     dashTitle:'لوحة التحكم', dashSub:'نظرة عامة على حالة الورشة اليوم',
     devicesTitle:'استقبال الأجهزة', devicesSub:'تتبع حالة كل جهاز من الاستلام حتى التسليم',
     inventoryTitle:'المخزون', inventorySub:'إدارة قطع الغيار والكميات',
@@ -999,7 +1018,7 @@ const STR = {
   },
   en:{
     navDashboard:'Dashboard', navDevices:'Devices', navInventory:'Inventory', navInvoices:'Invoices', navReports:'Reports', navBranches:'Branches', navAudit:'Audit Log', navCallCenter:'Call Center', navTransfers:'Stock Transfers',
-    brand:'Al-Maidan Maintenance', brandSub:'Repair management system', version:'Version v2026.11.26c', loading:'Loading...',
+    brand:'Al-Maidan Maintenance', brandSub:'Repair management system', version:'Version v2026.11.28', loading:'Loading...',
     dashTitle:'Dashboard', dashSub:"Today's overview of the workshop",
     devicesTitle:'Device intake', devicesSub:'Track each device from intake to delivery',
     inventoryTitle:'Inventory', inventorySub:'Manage spare parts and quantities',
@@ -1156,6 +1175,7 @@ let state = {
   newDevices: [],
   expenses: [],
   cashCloses: [],
+  notifs: [],
   invoices: [],
   branches: [],
   jobSeq: {},
@@ -1424,6 +1444,7 @@ function render(){
   const _focus = (_ae && _ae.id && (_ae.tagName==='INPUT' || _ae.tagName==='TEXTAREA') && !modalIsOpen()) ? {id:_ae.id, s:_ae.selectionStart, e:_ae.selectionEnd} : null;
   renderInner();
   try{ renderSyncBar(); }catch(e){}
+  try{ notifCheckNew(); }catch(e){}
   if(_focus){ const el = document.getElementById(_focus.id); if(el && el!==document.activeElement){ el.focus(); try{ el.setSelectionRange(_focus.s, _focus.e); }catch(e){} } }
 }
 function liveClockText(){
@@ -1564,6 +1585,7 @@ function renderInner(){
         </select>
         ` : `<span class="branch-chip">${icon('branch')} ${authRole==='admin'?T('adminModeLabel'):authRole==='callcenter'?TT('كول سنتر · كل الفروع','Call centre · all branches'):branchName(state.authBranchId)}</span>`}
         ${['branches','audit','items','stockcount','defects','accounts'].includes(state.page) || (state.page==='callcenter' && (authRole==='callcenter'||authRole==='admin')) ? '' : dateRangeHtml()}
+        ${bellHtml()}
         <span class="date-chip live-clock" id="liveClock" title="${TT('الوقت والتاريخ حسب ساعة هذا الجهاز','Date and time from this computer\'s clock')}">${liveClockText()}</span>
         <div class="lang-switch">
           <button class="lang-btn ${lang==='ar'?'active':''}" id="langAr">AR</button>
@@ -2640,6 +2662,7 @@ function rejectTransfer(id){
   t.status = 'rejected';
   t.rejectedAt = new Date().toISOString();
   logAudit('transfer_reject', authRole, currentActorName(), `${T('auditTransferRejected')}: ${t.name} x${t.qty}`);
+  pushNotif(notifTo(t.kind==='return' ? t.fromBranchId : t.toBranchId), 'transfer', false, TT(`انرفض طلب ${t.kind==='return'?'إرجاع':'تحويل'} ${t.name} ×${t.qty}`, `Your ${t.kind==='return'?'return':'transfer'} request for ${t.name} ×${t.qty} was rejected`), {page:'transfers'});
   saveTransfers();
   render();
 }
@@ -3188,6 +3211,7 @@ function approveDebt(id){
   if(!confirm(TT(`موافقة على تسليم ${r.jobNo||''} والباقي ${money(jobBalance(r))} دين على ${r.customerName||''}؟`, `Approve delivering ${r.jobNo||''} with ${money(jobBalance(r))} as debt?`))) return false;
   r.debtOk = {by:currentActorName(), at:new Date().toISOString(), reason:r.debtReq.reason||''}; delete r.debtReq; r.updatedAt = r.debtOk.at;
   logAudit('debt_approve', authRole, currentActorName(), `${TT('موافقة تسليم بالدين','Debt delivery approved')}: ${r.jobNo||''} · ${money(jobBalance(r))}`);
+  pushNotif(notifTo(r.branchId), 'debt', true, TT(`وافق المدير تسلّم الجوب ${r.jobNo||''} والباقي ${money(jobBalance(r))} دين على ${r.customerName||''}`, `Admin approved delivering ${r.jobNo||''} with ${money(jobBalance(r))} as debt`), {jobId:r.id});
   saveRepairs(); return true;
 }
 function rejectDebt(id){
@@ -3195,6 +3219,7 @@ function rejectDebt(id){
   const r = state.repairs.find(x=>x.id===id); if(!r || !r.debtReq) return;
   const why = prompt(TT('سبب الرفض (اختياري):','Reason (optional):'), ''); if(why===null) return false;
   logAudit('debt_reject', authRole, currentActorName(), `${TT('رفض التسليم بالدين','Debt delivery rejected')}: ${r.jobNo||''}${why?' · '+why:''}`);
+  pushNotif(notifTo(r.branchId), 'debt', false, TT(`رفض المدير تسليم الجوب ${r.jobNo||''} بالدين${why?' — '+why:''}`, `Debt delivery for ${r.jobNo||''} rejected${why?' — '+why:''}`), {jobId:r.id});
   delete r.debtReq; r.debtRejected = {by:currentActorName(), at:new Date().toISOString(), reason:why}; saveRepairs(); return true;
 }
 // delivery rule: an out-of-warranty job leaves only fully paid, or with the admin's OK for the rest as debt
@@ -3266,6 +3291,7 @@ function approveExpense(id){
   const e = (state.expenses||[]).find(x=>x.id===id); if(!e || e.st!=='pending') return;
   e.st = 'approved'; e.decidedBy = currentActorName(); e.decidedAt = new Date().toISOString();
   logAudit('expense_approve', authRole, e.decidedBy, `${TT('موافقة مصروف','Expense approved')}: ${e.type} · ${money(e.amount)} (${accBranchName(e.branchId)})`);
+  pushNotif(notifTo(e.branchId), 'expense', true, TT(`تمت الموافقة على المصروف: ${e.type} · ${money(e.amount)} دينار`, `Expense approved: ${e.type} · ${money(e.amount)}`), {page:'accounts'});
   saveExpenses(); return true;
 }
 function rejectExpense(id){
@@ -3274,6 +3300,7 @@ function rejectExpense(id){
   const why = prompt(TT('سبب الرفض (اختياري):','Reason (optional):'), ''); if(why===null) return false;
   e.st = 'rejected'; e.decidedBy = currentActorName(); e.decidedAt = new Date().toISOString(); e.rejReason = why;
   logAudit('expense_reject', authRole, e.decidedBy, `${TT('رفض مصروف','Expense rejected')}: ${e.type} · ${money(e.amount)} (${accBranchName(e.branchId)})${why?' · '+why:''}`);
+  pushNotif(notifTo(e.branchId), 'expense', false, TT(`انرفض المصروف: ${e.type} · ${money(e.amount)} دينار${why?' — '+why:''}`, `Expense rejected: ${e.type} · ${money(e.amount)}${why?' — '+why:''}`), {page:'accounts'});
   saveExpenses(); return true;
 }
 const EXP_ST = {pending:['بانتظار الموافقة','Awaiting approval','#92400e','#fef3c7'], approved:['معتمد','Approved','#065f46','#d1fae5'], rejected:['مرفوض','Rejected','#991b1b','#fee2e2']};
@@ -3327,6 +3354,7 @@ function receiveClose(id){
   if(!confirm(TT(`تأكيد استلام ${money(c.handed)} من ${branchName(c.branchId)}؟`, `Confirm receiving ${money(c.handed)} from ${branchName(c.branchId)}?`))) return false;
   c.st = 'received'; c.recvBy = currentActorName(); c.recvAt = new Date().toISOString();
   logAudit('cash_receive', authRole, c.recvBy, `${TT('استلام مبلغ فرع','Branch cash received')}: ${branchName(c.branchId)} · ${money(c.handed)}`);
+  pushNotif(notifTo(c.branchId), 'cashClose', true, TT(`المدير أكّد استلام المبلغ ${money(c.handed)} دينار`, `Admin confirmed receiving ${money(c.handed)}`), {page:'accounts'});
   saveCashCloses(); return true;
 }
 function returnClose(id){
@@ -3335,6 +3363,7 @@ function returnClose(id){
   const why = prompt(TT('ليش ترجّع التسليم للفرع؟ (الفرع يسلّم مرة ثانية)','Why return it to the branch? (the branch hands over again)'), ''); if(why===null) return false;
   c.st = 'returned'; c.retBy = currentActorName(); c.retAt = new Date().toISOString(); c.retReason = why;
   logAudit('cash_return', authRole, c.retBy, `${TT('إرجاع تسليم','Hand-over returned')}: ${branchName(c.branchId)} · ${money(c.handed)}${why?' · '+why:''}`);
+  pushNotif(notifTo(c.branchId), 'cashClose', false, TT(`المدير رجّع تسليم المبلغ ${money(c.handed)} دينار — سلّم مرة ثانية${why?' — '+why:''}`, `Admin returned the hand-over of ${money(c.handed)}${why?' — '+why:''}`), {page:'accounts'});
   saveCashCloses(); return true;
 }
 const CLOSE_ST = {submitted:['بانتظار تأكيد المدير','Awaiting admin','#92400e','#fef3c7'], received:['استلمه المدير','Received','#065f46','#d1fae5'], returned:['مرجّع للفرع','Returned','#991b1b','#fee2e2']};
@@ -4979,9 +5008,10 @@ function attachPageHandlers(){
    - Local changes are kept in IndexedDB until Drive confirms them.
    ===================================================================== */
 function TT(ar, en){ return lang==='ar' ? ar : en; }
-const SHARED_KEYS = ['deletions','stockMoves','repairs','inventory','invoices','branches','transfers','partsCatalog','stockCounts','auditLog','adminAccount','warehouseAccount','jobSeq','deviceCatalog','serviceLists','callCenterAccount','newDevices','viewerAccount','expenses','cashCloses'];
+const SHARED_KEYS = ['deletions','stockMoves','repairs','inventory','invoices','branches','transfers','partsCatalog','stockCounts','auditLog','adminAccount','warehouseAccount','jobSeq','deviceCatalog','serviceLists','callCenterAccount','newDevices','viewerAccount','expenses','cashCloses','notifs'];
 const ARRAY_KEYS = ['repairs','inventory','invoices','branches','transfers','partsCatalog','stockCounts','newDevices','expenses','cashCloses'];
-const APPEND_KEYS = ['auditLog','deletions','stockMoves'];
+const APPEND_KEYS = ['auditLog','deletions','stockMoves','notifs'];
+const NOTIF_CAP = 1500;
 const DOC_KEYS = ['adminAccount','warehouseAccount','serviceLists','callCenterAccount','viewerAccount'];
 const AUDIT_CAP = 5000;
 const OFFLINE_ERR = 'OFFLINE';
@@ -5191,6 +5221,7 @@ function mergeKey(key, local, remote){
   if(APPEND_KEYS.includes(key)){
     let m = mergeArray(local, remote, null, true);
     if(key==='auditLog'){ m.sort((x,y)=>String(x.ts).localeCompare(String(y.ts))); if(m.length>AUDIT_CAP) m = m.slice(-AUDIT_CAP); }
+    if(key==='notifs'){ m.sort((x,y)=>String(x.at).localeCompare(String(y.at))); if(m.length>NOTIF_CAP) m = m.slice(-NOTIF_CAP); }
     return m;
   }
   if(key==='jobSeq'){ const o = {...remote}; for(const k in local) o[k] = Math.max(Number(o[k])||0, Number(local[k])||0); return o; }
@@ -6033,6 +6064,111 @@ function logAudit(action, actorRole, actorName, detail){
   state.auditLog.push({ id: uid(), ts: new Date().toISOString(), actorRole: actorRole||authRole||'-', actorName: actorName||currentActorName(), action, detail: detail||'' });
   if(state.auditLog.length > AUDIT_CAP) state.auditLog.splice(0, state.auditLog.length - AUDIT_CAP);
   saveAuditLog();
+}
+
+/* =====================================================================
+   v2026.11.28 — NOTIFICATIONS (🔔)
+   - When the admin / warehouse approves or rejects a request, the account that
+     asked gets a notification (synced through Drive in notifs.json).
+   - The admin / warehouse bell also shows how many requests wait for them.
+   - "Read" is kept per device (localStorage), so nothing is rewritten on Drive.
+   ===================================================================== */
+// who gets a notice about a location: the main warehouse → the warehouse account, a branch → that branch
+function notifTo(locId){
+  if(!locId || locId===GENERAL_BR) return null;
+  if(locId===MAIN_WH_ID) return {role:'warehouse', branchId:''};
+  return {role:'branch', branchId:locId};
+}
+function notifIsMe(to){
+  if(!to) return false;
+  if(to.role!==authRole) return false;
+  return to.role!=='branch' || to.branchId===state.authBranchId;
+}
+// kind: a key of APPR_TYPES; ok: true approved / false rejected / null info
+function pushNotif(to, kind, ok, text, link){
+  try{
+    if(viewOnly || !to || notifIsMe(to)) return;
+    if(!state.notifs) state.notifs = [];
+    state.notifs.push({id:uid(), at:new Date().toISOString(), role:to.role, branchId:to.branchId||'', kind:kind||'', ok:(ok===true||ok===false)?ok:null,
+      text:String(text||''), by:currentActorName(), byRole:authRole, page:(link&&link.page)||'', jobId:(link&&link.jobId)||''});
+    if(state.notifs.length > NOTIF_CAP) state.notifs.splice(0, state.notifs.length - NOTIF_CAP);
+    queueSave('notifs');
+  }catch(e){ console.error('pushNotif', e); }
+}
+function myNotifs(){
+  if(!authRole || viewOnly) return [];
+  return (state.notifs||[]).filter(n=>n && notifIsMe({role:n.role, branchId:n.branchId}))
+    .sort((a,b)=>String(b.at).localeCompare(String(a.at)));
+}
+function notifSeenKey(){ return 'notif_seen_'+authRole+'_'+(authRole==='branch'?(state.authBranchId||''):''); }
+function notifSeenAt(){ return lsGet(notifSeenKey()) || ''; }
+function notifUnread(){ const s = notifSeenAt(); return myNotifs().filter(n=>String(n.at)>s).length; }
+function notifPending(){ return (authRole==='admin' || authRole==='warehouse') && !viewOnly ? approvalsTotal() : 0; }
+function bellHtml(){
+  if(!authRole || viewOnly) return '';
+  const u = notifUnread(), p = notifPending(), n = u + p;
+  return `<button class="bell-btn ${u?'bell-ring':''}" id="bellBtn" onclick="openNotifs()" title="${TT('الإشعارات','Notifications')}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+    ${n?`<span class="bell-badge">${n>99?'99+':n}</span>`:''}</button>`;
+}
+function notifIcon(n){ return n.ok===true ? '✅' : n.ok===false ? '❌' : 'ℹ️'; }
+function openNotifs(){
+  const list = myNotifs().slice(0, 150), seen = notifSeenAt(), p = notifPending();
+  const E = s=>String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
+  const pend = p ? `<div class="notif-item notif-pend" onclick="closeModal();notifOpenApprovals()">
+      <div class="notif-ic">⏳</div><div style="flex:1"><b>${TT(`عندك ${p} طلب بانتظار موافقتك`,`${p} request(s) waiting for your approval`)}</b>
+      <div class="notif-sub">${TT('اضغط حتى تفتح طلبات الموافقة','Tap to open the approval requests')}</div></div></div>` : '';
+  const rows = list.map(n=>`<div class="notif-item ${String(n.at)>seen?'notif-new':''}" onclick="notifGo('${n.id}')">
+      <div class="notif-ic">${notifIcon(n)}</div>
+      <div style="flex:1;min-width:0">
+        <div class="notif-head"><b>${E(n.kind && typeof apprLabel==='function' ? apprLabel(n.kind) : TT('إشعار','Notice'))}</b>${n.ok===true?` <span class="notif-tag ok">${TT('تمت الموافقة','Approved')}</span>`:n.ok===false?` <span class="notif-tag no">${TT('مرفوض','Rejected')}</span>`:''}</div>
+        <div class="notif-txt">${E(n.text)}</div>
+        <div class="notif-sub">${E(n.by||'')} · ${typeof fmtDateTime==='function'?fmtDateTime(n.at):E(n.at)}</div>
+      </div></div>`).join('');
+  showModal(`<h3>🔔 ${TT('الإشعارات','Notifications')}</h3>
+    <div class="notif-list">${pend}${rows || (pend?'':`<p style="text-align:center;color:var(--muted);padding:24px;">${TT('ماكو إشعارات بعد 👍','No notifications yet 👍')}</p>`)}</div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal()">${TT('سكّر','Close')}</button></div>`);
+  if(list.length) lsSet(notifSeenKey(), String(list[0].at));
+  notifLastCount = notifUnread();
+  const b = document.getElementById('bellBtn'); if(b) b.outerHTML = bellHtml();
+}
+function notifOpenApprovals(){
+  if(authRole==='admin'){ state.page = 'dashboard'; render(); }
+  else { render(); }
+  const a = approvalItems(); const k = Object.keys(a).find(x=>a[x].length);
+  if(k && typeof openApprovals==='function') setTimeout(()=>openApprovals(k), 30);
+}
+function notifGo(id){
+  const n = (state.notifs||[]).find(x=>x.id===id); closeModal();
+  if(!n) return;
+  if(n.jobId && state.repairs.some(r=>r.id===n.jobId) && authRole!=='warehouse'){
+    if(state.page!=='devices'){ state.page = 'devices'; render(); }
+    setTimeout(()=>{ try{ openRepairModal(n.jobId); }catch(e){} }, 30); return;
+  }
+  if(n.page){ state.page = n.page; render(); }
+}
+// a small pop-up when a new notice arrives while the system is open
+let notifLastCount = null;
+let notifAcct = '';
+function notifCheckNew(){
+  if(!authRole || viewOnly){ notifAcct = ''; return; }
+  const acct = notifSeenKey(); if(acct!==notifAcct){ notifAcct = acct; notifLastCount = null; notifLastPending = null; }
+  const u = notifUnread();
+  if(notifLastCount!==null && u>notifLastCount){
+    const n = myNotifs()[0];
+    if(n) notifToast(`${notifIcon(n)} ${n.text}`);
+  }
+  notifLastCount = u;
+  const p = notifPending();
+  if(notifLastPending!==null && p>notifLastPending) notifToast(TT(`وصل طلب جديد بانتظار موافقتك (${p})`, `A new request is waiting for your approval (${p})`));
+  notifLastPending = p;
+}
+let notifLastPending = null;
+function notifToast(msg){
+  let el = document.getElementById('notifToast');
+  if(!el){ el = document.createElement('div'); el.id = 'notifToast'; el.onclick = ()=>{ el.style.display='none'; openNotifs(); }; document.body.appendChild(el); }
+  el.textContent = '🔔 ' + msg; el.style.display = 'block';
+  clearTimeout(el._t); el._t = setTimeout(()=>{ el.style.display = 'none'; }, 9000);
 }
 
 async function genJobNo(branchId, dateISO){
@@ -6957,6 +7093,7 @@ function openRepairModal(id){
         <div class="form-row"><label>${T('oldImeiLabel')}</label><input value="${editing?(editing.imei||''):''}" class="mono" disabled placeholder="${T('oldImeiHint')}"></div>
         <div class="form-row swap-dev-only"><label>${T('newImeiLabel')}</label><input id="f_newImei" class="mono" value="${editing?(editing.newImei||''):''}" placeholder="${TT('15 رقم — إجباري قبل تسليم الجهاز للزبون','15 digits — required before handing over')}" maxlength="17" inputmode="numeric"></div>
       </div>
+      <div class="swap-dev-only"><label style="display:flex;gap:8px;align-items:center;font-size:13px;margin:-4px 0 12px;padding:8px 10px;background:#f1f0ff;border-radius:10px;cursor:pointer;"><input type="checkbox" id="f_swapMarket" style="width:auto" ${editing&&editing.swapMarket?'checked':''}> 🛒 ${TT('الجهاز البديل مشترى من السوق (مو من الأجهزة اللي بعثها المخزن)','The replacement device was bought from the market (not one sent by the warehouse)')}</label></div>
       <div class="form-row swap-dev-only"><label>${TT('الجهاز البديل من المخزن','Replacement device from stock')}</label><select id="f_swapInv">${swapInvOptionsHtml(modalBranchId, editing?editing.swapInvId:'')}</select>
         <div style="font-size:11.5px;color:var(--muted);margin-top:4px;">${TT('ينصرف من المخزن لما تسجل الـ IMEI الجديد، والجهاز القديم ينضاف تلقائياً لمخزون الأجهزة العاطلة.','Taken from stock once the new IMEI is recorded; the old device is added automatically to the defective stock.')}</div></div>
       <div class="form-2col">
@@ -7317,6 +7454,7 @@ async function saveRepair(id){
   const swapDateVal = swap ? g('f_swapDate') : '';
   const swapNote = swap ? g('f_swapNote').trim() : '';
   const swapInvId = swap ? g('f_swapInv') : '';
+  const swapMarket = swap && !refundMode && !!(document.getElementById('f_swapMarket')||{}).checked;
   const notActive = !!(document.getElementById('f_notActive')||{}).checked;
   const activationDate = notActive ? '' : g('f_activationDate');
   const agentName = (g('f_agentName')||'').trim();
@@ -7383,7 +7521,7 @@ async function saveRepair(id){
   const repairType = g('f_repairType');
   const techNote = g('f_techNote').trim();
   { const dup = duplicatePartError([...modalPartsUsed, ...modalPendingParts]); if(dup){ alert(dup); return; } }
-  const fields = {pendingParts: JSON.parse(JSON.stringify(modalPendingParts)), techNote, boardAction, customerName, agentName, notActive, phone, branchId, deviceBrand, deviceModel, imei, issue, faults, issueNote, repairType, estCost, laborCost, quoteStatus, technician, serviceType, warrantyStatus, activationDate, warrantyMonths, warrantyExpiry, newImei, newDeviceModel, swapDate, swapNote, swapInvId, partsUsed: JSON.parse(JSON.stringify(modalPartsUsed)), softwareOps: [...modalSoftware], photoBefore:modalPhotoBefore, photoAfter:modalPhotoAfter};
+  const fields = {pendingParts: JSON.parse(JSON.stringify(modalPendingParts)), techNote, boardAction, customerName, agentName, notActive, phone, branchId, deviceBrand, deviceModel, imei, issue, faults, issueNote, repairType, estCost, laborCost, quoteStatus, technician, serviceType, warrantyStatus, activationDate, warrantyMonths, warrantyExpiry, newImei, newDeviceModel, swapDate, swapNote, swapInvId, swapMarket, partsUsed: JSON.parse(JSON.stringify(modalPartsUsed)), softwareOps: [...modalSoftware], photoBefore:modalPhotoBefore, photoAfter:modalPhotoAfter};
   Object.assign(fields, swapRule.fields);
   if(!swap){ if(repairType!=='part'){ fields.partsUsed = []; fields.pendingParts = []; } if(repairType!=='software') fields.softwareOps = []; }
   if(swap){
@@ -7508,6 +7646,7 @@ function approvePartPrice(id){
     x.sellPrice = price; if(buy>0) x.costPrice = buy; delete x.pendingPrice; n++;
   }
   saveInventory();
+  pushNotif(notifTo(pp.branchId || inv.branchId), 'price', true, TT(`تم اعتماد سعر ${inv.name}: ${money(price)} دينار${Number(pp.price)!==price?` (الطلب كان ${money(pp.price)})`:''}${pp.jobNo?' — جوب '+pp.jobNo:''}`, `Price of ${inv.name} approved: ${money(price)}`), pp.jobId?{jobId:pp.jobId}:{page:'inventory'});
   logAudit('price_approve', authRole, currentActorName(), `${TT('اعتماد سعر قطعة','Part price approved')}: ${inv.code||'-'} · ${inv.name} = ${money(price)}${buy>0?' / '+TT('شراء','buy')+' '+money(buy):''} (${TT('طلب','request')}: ${money(pp.price)} — ${pp.by||''}, ${pp.jobNo||''}) · ${n} ${TT('سطر','rows')}`);
   return true;
 }
@@ -7534,6 +7673,7 @@ function approveDiscount(id, ask){
   syncPaidFlag(r);
   ccAfterDiscount(r, true, before);
   saveRepairs();
+  pushNotif(notifTo(r.branchId), 'disc', true, TT(`وافق المدير على الخصم للجوب ${r.jobNo||''}: ${done.map(({l,price})=>`${l.name} ${money(price)}`).join('، ')}`, `Discount approved for ${r.jobNo||''}`), {jobId:r.id});
   logAudit('discount_approve', authRole, currentActorName(), `${TT('موافقة خصم','Discount approved')}: ${r.jobNo||''} — ${done.map(({l,price})=>`${l.name} ${money(l.list)}→${money(price)}`).join('، ')} (${TT('طلب','request')}: ${d.by||''} — ${d.reason||''})`);
   return true;
 }
@@ -7543,6 +7683,7 @@ function rejectDiscount(id){
   if(!confirm(TT(`رفض طلب الخصم للجوب ${r.jobNo||''}؟ يبقى السعر سعر القائمة.`, `Reject the discount for job ${r.jobNo||''}? The list price stays.`))) return false;
   const d = r.discReq; delete r.discReq; r.updatedAt = new Date().toISOString();
   ccAfterDiscount(r, false, jobCost(r)); saveRepairs();
+  pushNotif(notifTo(r.branchId), 'disc', false, TT(`رفض المدير طلب الخصم للجوب ${r.jobNo||''} — يبقى سعر القائمة`, `Discount rejected for ${r.jobNo||''}`), {jobId:r.id});
   logAudit('discount_reject', authRole, currentActorName(), `${TT('رفض خصم','Discount rejected')}: ${r.jobNo||''} — ${(d.lines||[]).map(l=>`${l.name} ${money(l.req)}`).join('، ')} (${d.by||''})`);
   return true;
 }
@@ -7550,6 +7691,7 @@ function rejectPartPrice(id){
   if(authRole!=='admin'){ alert(T('alertNoPermission')); return; }
   const inv = state.inventory.find(x=>x.id===id); if(!inv || !inv.pendingPrice) return;
   const pp = inv.pendingPrice; delete inv.pendingPrice; saveInventory();
+  pushNotif(notifTo(pp.branchId || inv.branchId), 'price', false, TT(`انرفض سعر ${inv.name} (${money(pp.price)} دينار)${pp.jobNo?' — جوب '+pp.jobNo:''}`, `Price of ${inv.name} (${money(pp.price)}) rejected`), pp.jobId?{jobId:pp.jobId}:{page:'inventory'});
   logAudit('price_reject', authRole, currentActorName(), `${TT('رفض سعر قطعة','Part price rejected')}: ${inv.code||'-'} · ${inv.name} (${money(pp.price)} — ${pp.by||''})`);
   return true;
 }
@@ -7719,6 +7861,7 @@ function approveTeardown(id){
   const r = state.repairs.find(x=>x.id===id); if(!r || !r.tdReq || r.tdReq.st!=='pending') return;
   r.tdReq = Object.assign({}, r.tdReq, {st:'approved', okBy:currentActorName(), okAt:new Date().toISOString()}); r.updatedAt = new Date().toISOString(); saveRepairs();
   logAudit('teardown_approve', authRole, currentActorName(), `${TT('موافقة تفكيك','Teardown approved')}: ${r.jobNo||''} — ${r.tdReq.brand} ${r.tdReq.model} · ${r.tdReq.imei}`);
+  pushNotif(notifTo(r.branchId), 'teardown', true, TT(`وافق المدير على تفكيك ${r.tdReq.brand} ${r.tdReq.model} للجوب ${r.jobNo||''}`, `Teardown approved for ${r.jobNo||''}`), {jobId:r.id});
   return true;
 }
 function rejectTeardown(id){
@@ -7727,6 +7870,7 @@ function rejectTeardown(id){
   const note = prompt(TT('سبب الرفض (اختياري):','Reason (optional):'), ''); if(note===null) return false;
   r.tdReq = Object.assign({}, r.tdReq, {st:'rejected', note:note.trim(), okBy:currentActorName(), okAt:new Date().toISOString()}); r.updatedAt = new Date().toISOString(); saveRepairs();
   logAudit('teardown_reject', authRole, currentActorName(), `${TT('رفض تفكيك','Teardown rejected')}: ${r.jobNo||''}${note?' — '+note:''}`);
+  pushNotif(notifTo(r.branchId), 'teardown', false, TT(`رفض المدير طلب التفكيك للجوب ${r.jobNo||''}${note?' — '+note:''}`, `Teardown rejected for ${r.jobNo||''}${note?' — '+note:''}`), {jobId:r.id});
   return true;
 }
 function tdCatalogFor(q){ return (state.partsCatalog||[]).filter(c=>c.code && partFit(c, '', q.brand, q.model)).sort((a,b)=>String(a.partType||'').localeCompare(String(b.partType||''))); }
@@ -7831,14 +7975,30 @@ function returnNewDevices(){
   render();
 }
 // a SWAP job got / changed its new IMEI: tie it to the device owed by the branch
+// a device bought from the market only exists for its SWAP: unlinking it removes it instead of putting it back «at the branch»
+function ndRelease(d){
+  if(d.src==='market'){ state.newDevices = ndAll().filter(x=>x!==d); return; }
+  Object.assign(d, {st:'recv', jobId:'', jobNo:'', usedAt:''});
+}
 function linkSwapNewDevice(r, prevImei){
   let changed = false;
   const prev = prevImei && prevImei!==r.newImei ? ndAll().find(d=>d.jobId===r.id && d.st==='swap') : null;
-  if(prev){ Object.assign(prev, {st:'recv', jobId:'', jobNo:'', usedAt:''}); changed = true; }
+  if(prev){ ndRelease(prev); changed = true; }
   const gone = !isSwapRepair(r) || r.status===CANCELLED_STATUS || isRefundSwap(r) || !r.newImei;
-  if(gone){ const d = ndAll().find(x=>x.jobId===r.id && x.st==='swap'); if(d){ Object.assign(d, {st:'recv', jobId:'', jobNo:'', usedAt:''}); changed = true; } r.newDevUnlisted = false; if(changed) saveNewDevices(); return null; }
+  if(gone){ const d = ndAll().find(x=>x.jobId===r.id && x.st==='swap'); if(d){ ndRelease(d); changed = true; } r.newDevUnlisted = false; if(changed) saveNewDevices(); return null; }
   const d = ndByImei(r.newImei);
   if(d && d.jobId===r.id){ r.newDevUnlisted = false; if(changed) saveNewDevices(); return null; }
+  // bought from the market: recorded here and tied to the SWAP straight away, no warning
+  if(!d && r.swapMarket){
+    const at = new Date().toISOString(), by = currentActorName();
+    const nm = String(r.newDeviceModel||'').trim();
+    state.newDevices = state.newDevices || [];
+    state.newDevices.push({id:uid(), imei:String(r.newImei).replace(/\s|-/g,''), brand:r.deviceBrand||'', model:nm||r.deviceModel||'', branchId:r.branchId, st:'swap', src:'market',
+      batch:'MKT-'+at.slice(0,10).replace(/-/g,''), sentAt:at, sentBy:by, recvAt:at, recvBy:by, jobId:r.id, jobNo:r.jobNo||'', usedAt:at});
+    r.newDevUnlisted = false; saveNewDevices();
+    logAudit('newdev_market', authRole, by, `${TT('جهاز بديل مشترى من السوق','Replacement bought from market')}: ${r.newImei} → ${r.jobNo||''} (${branchName(r.branchId)})`);
+    return null;
+  }
   if(d && d.branchId===r.branchId && ['recv','sent'].includes(d.st)){
     Object.assign(d, {st:'swap', jobId:r.id, jobNo:r.jobNo||'', usedAt:new Date().toISOString(), ...(d.recvAt?{}:{recvAt:new Date().toISOString(), recvBy:currentActorName()})});
     r.newDevUnlisted = false; saveNewDevices(); return null;
@@ -7871,7 +8031,7 @@ function renderNewDevicesPanel(){
       <div class="appr-tile ${unlisted.length?'':'appr-zero'}" style="--ac:#dc2626"><div class="appr-n">${unlisted.length}</div><div class="appr-l">${TT('سواب بجهاز مو مسجل','SWAP with unlisted device')}</div></div>
     </div>
     <div class="table-wrap"><table><thead><tr><th><input type="checkbox" onchange="ndToggleAll(this.checked)"></th><th>IMEI</th><th>${TT('الجهاز','Device')}</th><th>${T('branchLabel')}</th><th>${TT('أرسله','Sent')}</th><th>${TT('استلمه','Received')}</th><th>${TT('الجوب','Job')}</th><th>${TT('الحالة','Status')}</th></tr></thead><tbody>
-    ${shown.length?shown.map(d=>`<tr><td><input type="checkbox" class="nd-chk" data-id="${d.id}" ${ndSel.has(d.id)?'checked':''} onchange="ndToggle(this.dataset.id,this.checked)"></td><td class="mono">${E(d.imei)}</td><td>${E(d.brand)} ${E(d.model)}</td><td>${E(branchName(d.branchId))}</td><td style="font-size:12px">${fmtDate(d.sentAt)}<div style="color:var(--muted)">${E(d.sentBy||'')}</div></td><td style="font-size:12px">${d.recvAt?fmtDate(d.recvAt)+`<div style="color:var(--muted)">${E(d.recvBy||'')}</div>`:'-'}</td><td class="mono">${d.jobId?`<a href="#" onclick="event.preventDefault();openRepairModal('${d.jobId}')">${E(d.jobNo||'')}</a>`:'-'}</td><td>${ndBadge(d.st)}</td></tr>`).join(''):`<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:16px">${TT('ماكو أجهزة هنا','No devices here')}</td></tr>`}
+    ${shown.length?shown.map(d=>`<tr><td><input type="checkbox" class="nd-chk" data-id="${d.id}" ${ndSel.has(d.id)?'checked':''} onchange="ndToggle(this.dataset.id,this.checked)"></td><td class="mono">${E(d.imei)}</td><td>${E(d.brand)} ${E(d.model)}${d.src==='market'?`<div style="font-size:11px;color:#7c3aed">🛒 ${TT('مشترى من السوق','Bought from market')}</div>`:''}</td><td>${E(branchName(d.branchId))}</td><td style="font-size:12px">${fmtDate(d.sentAt)}<div style="color:var(--muted)">${E(d.sentBy||'')}</div></td><td style="font-size:12px">${d.recvAt?fmtDate(d.recvAt)+`<div style="color:var(--muted)">${E(d.recvBy||'')}</div>`:'-'}</td><td class="mono">${d.jobId?`<a href="#" onclick="event.preventDefault();openRepairModal('${d.jobId}')">${E(d.jobNo||'')}</a>`:'-'}</td><td>${ndBadge(d.st)}</td></tr>`).join(''):`<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:16px">${TT('ماكو أجهزة هنا','No devices here')}</td></tr>`}
     </tbody></table></div>
     ${unlisted.length?`<p style="font-size:12px;color:#dc2626;margin:8px 0 0;">⚠️ ${TT('سوابات انطى بيها جهاز مو مسجل بذمة الفرع','SWAPs given a device not recorded at the branch')}: ${unlisted.slice(0,30).map(r=>`<a href="#" onclick="event.preventDefault();openRepairModal('${r.id}')" class="mono">${E(r.jobNo||'')}</a> (${E(r.newImei||'')})`).join('، ')}</p>`:''}</div>`;
 }
@@ -8372,6 +8532,9 @@ function approveTransfer(id){
   t.sentAt = new Date().toISOString();
   t.sentBy = currentActorName();
   logAudit('transfer_approve', authRole, currentActorName(), `${T('auditTransferApproved')}: ${t.name} x${t.qty} → ${branchName(t.toBranchId)}`);
+  pushNotif(notifTo(t.kind==='return' ? t.fromBranchId : t.toBranchId), 'transfer', true, t.kind==='return'
+    ? TT(`تمت الموافقة على إرجاع ${t.name} ×${t.qty} للمخزن الرئيسي`, `Return of ${t.name} ×${t.qty} approved`)
+    : TT(`تمت الموافقة على طلبك وانبعثت ${t.name} ×${t.qty} — أكّد الاستلام لما توصل`, `Approved: ${t.name} ×${t.qty} was sent — confirm receipt when it arrives`), {page:'transfers'});
   saveStockMoves(); saveInventory(); saveTransfers();
   render();
 }
@@ -8819,6 +8982,7 @@ function setVocStatus(id, val){
   const tag = isVoc(r) ? 'VOC' : 'SWAP';
   r.statusHistory.push({s:r.status, at:r.vocAt, by:r.vocBy, note:(val==='approved'?TT(`موافقة المدير على ${tag}`,`${tag} approved by admin`):TT(`رفض المدير ${tag}`,`${tag} rejected by admin`))+(r.vocNote?': '+r.vocNote:'')});
   saveRepairs();
+  pushNotif(notifTo(r.branchId), 'swap', val==='approved', TT(`${val==='approved'?'وافق المدير على':'رفض المدير'} ${tag} للجوب ${r.jobNo||''}${r.customerName?' ('+r.customerName+')':''}${r.vocNote?' — '+r.vocNote:''}`, `${tag} for job ${r.jobNo||''} was ${val==='approved'?'approved':'rejected'}${r.vocNote?' — '+r.vocNote:''}`), {jobId:r.id});
   logAudit('swap_voc', 'admin', currentActorName(), `${r.jobNo||''} — ${val==='approved'?TT('موافقة VOC','VOC approved'):TT('رفض VOC','VOC rejected')} (${r.swapDays} ${TT('يوم من التفعيل','days from activation')})${r.vocNote?' — '+r.vocNote:''}`);
   render();
 }
@@ -9827,6 +9991,7 @@ function confirmSendPartForRequest(id){
   addMove(item.id, -1, 'transfer_out', 'tr:'+t.id, 'trS_'+t.id);
   state.transfers.push(t);
   r.partReq.status = 'sent'; r.partReq.sentAt = now; r.partReq.sentBy = currentActorName(); r.partReq.transferId = t.id;
+  pushNotif(notifTo(r.branchId), 'partReq', true, TT(`انبعثت القطعة المطلوبة للجوب ${r.jobNo||''}: ${t.name||''} ×${t.qty||1} — أكّد الاستلام لما توصل`, `The part for job ${r.jobNo||''} was sent: ${t.name||''}`), {jobId:r.id});
   if(!Array.isArray(r.statusHistory)) r.statusHistory = [];
   r.statusHistory.push({s:r.status, at:now, by:currentActorName(), note:`${TT('انبعثت القطعة','Part sent')}: ${item.name} (${branchName(item.branchId)} → ${branchName(r.branchId)})`});
   saveStockMoves(); saveInventory(); saveTransfers(); saveRepairs();
@@ -9838,6 +10003,7 @@ function cancelPartRequest(id){
   const why = prompt(TT('سبب إلغاء طلب القطعة:','Reason for cancelling the part request:'), '');
   if(why===null) return;
   r.partReq.status = 'cancelled'; r.partReq.cancelReason = why.trim(); r.partReq.cancelledBy = currentActorName();
+  pushNotif(notifTo(r.branchId), 'partReq', false, TT(`انلغى طلب القطعة للجوب ${r.jobNo||''}${why.trim()?' — '+why.trim():''}`, `Part request for ${r.jobNo||''} was cancelled${why.trim()?' — '+why.trim():''}`), {jobId:r.id});
   if(!Array.isArray(r.statusHistory)) r.statusHistory = [];
   r.statusHistory.push({s:r.status, at:new Date().toISOString(), by:currentActorName(), note:TT('إلغاء طلب القطعة','Part request cancelled')+(why.trim()?': '+why.trim():'')});
   saveRepairs(); closeModal(); render();
@@ -9971,6 +10137,7 @@ function approvePartAdd(id){
   addMove(row.id, pa.qty, 'add');
   logAudit('stock_add', authRole, currentActorName(), `${TT('موافقة على إضافة قطعة','Part add approved')}: ${row.name} ×${pa.qty} (${locName(row.branchId)}) · ${TT('طلب','requested by')} ${pa.by}`);
   delete row.pendingAdd; row.addApprovedBy = currentActorName(); row.updatedAt = new Date().toISOString();
+  pushNotif(notifTo(row.branchId), 'partAdd', true, TT(`تمت الموافقة على إضافة ${row.name} ×${pa.qty} لمخزنك${pa.jobNo?' — جوب '+pa.jobNo:''}`, `Approved: ${row.name} ×${pa.qty} added to your stock`), pa.jobId?{jobId:pa.jobId}:{page:'inventory'});
   const jobMsg = pa.jobId ? issueApprovedPartToJob(row, pa) : '';
   saveStockMoves(); saveInventory(); render();
   if(jobMsg) setTimeout(()=>alert(jobMsg), 50);
@@ -10000,6 +10167,7 @@ function rejectPartAdd(id){
   const reason = prompt(TT('سبب الرفض (اختياري):','Reason for rejecting (optional):'), ''); if(reason===null) return;
   const pa = row.pendingAdd;
   logAudit('stock_add', authRole, currentActorName(), `${TT('رفض إضافة قطعة','Part add rejected')}: ${row.name} ×${pa.qty} (${locName(row.branchId)})${reason?' · '+reason:''}`);
+  pushNotif(notifTo(row.branchId), 'partAdd', false, TT(`انرفض طلب إضافة ${row.name} ×${pa.qty}${reason?' — '+reason:''}`, `Rejected: adding ${row.name} ×${pa.qty}${reason?' — '+reason:''}`), pa.jobId?{jobId:pa.jobId}:{page:'inventory'});
   if(pa.jobId){
     const r = state.repairs.find(x=>x.id===pa.jobId);
     if(r && (r.pendingParts||[]).some(x=>x.invId===id)){
@@ -10555,6 +10723,7 @@ function approveCountEdit(id){
   if(!confirm(TT(`موافقة على تعديل الجرد ${c.no} (طلب ${pe.by})\n${plan.length} صنف · زيادة +${plus} · نقص ${minus}\nالمخزون راح يتصحح هسه. تكمل؟`,
                  `Approve the edit to count ${c.no} (requested by ${pe.by})\n${plan.length} item(s) · +${plus} / ${minus}\nStock will be corrected now. Continue?`))) return;
   applyCountEdit(c, pe.counts, pe.by);
+  pushNotif(pe.role==='warehouse' ? notifTo(MAIN_WH_ID) : notifTo(c.branchId), 'countEdit', true, TT(`تمت الموافقة على تعديل الجرد ${c.no} وتصحّح المخزون`, `Edit to count ${c.no} approved`), {page:'stockcount'});
   render();
 }
 function rejectCountEdit(id){
@@ -10566,6 +10735,7 @@ function rejectCountEdit(id){
   c.lastRejectedEdit = {by:pe.by, at:pe.at, rejectedBy:currentActorName(), rejectedAt:new Date().toISOString(), reason:String(reason).trim()};
   delete c.pendingEdit;
   logAudit('stock_count', authRole, currentActorName(), `${TT('رفض تعديل جرد','Count edit rejected')}: ${c.no} · ${TT('طلب','requested by')} ${pe.by}${reason?` · ${reason}`:''}`);
+  pushNotif(pe.role==='warehouse' ? notifTo(MAIN_WH_ID) : notifTo(c.branchId), 'countEdit', false, TT(`انرفض طلب تعديل الجرد ${c.no}${reason?' — '+reason:''}`, `Edit to count ${c.no} rejected${reason?' — '+reason:''}`), {page:'stockcount'});
   saveCounts(); render();
 }
 function renderCountSheet(c){
@@ -10708,6 +10878,7 @@ function submitCount(id){
 function returnCount(id){
   const c = state.stockCounts.find(x=>x.id===id); if(!c || c.status!=='submitted' || !canPostCount()) return;
   c.status = 'draft'; logAudit('stock_count', authRole, currentActorName(), `${TT('إرجاع جرد للفرع','Count returned')}: ${c.no}`);
+  pushNotif(notifTo(c.branchId), 'count', false, TT(`الجرد ${c.no} رجع إلك للتعديل وإعادة الإرسال`, `Count ${c.no} was returned to you for changes`), {page:'stockcount'});
   saveCounts(); render();
 }
 function postCount(id){
@@ -10729,6 +10900,7 @@ function postCount(id){
   }
   Object.assign(c, {status:'posted', postedAt:new Date().toISOString(), postedBy:currentActorName(), result});
   logAudit('stock_count', authRole, currentActorName(), `${TT('اعتماد جرد','Count posted')}: ${c.no} (${locName(c.branchId)}) · ${changes.length} ${TT('فرق','diffs')}`);
+  pushNotif(notifTo(c.branchId), 'count', true, TT(`تم اعتماد الجرد ${c.no} (${changes.length} فرق) وتصحّح المخزون`, `Count ${c.no} was posted (${changes.length} differences)`), {page:'stockcount'});
   saveStockMoves(); saveInventory(); saveCounts(); render();
 }
 function exportCountExcel(id){
