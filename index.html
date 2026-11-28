@@ -1504,7 +1504,7 @@ function renderInner(){
   }else if(authRole==='callcenter'){
     if(state.page!=='callcenter') state.page = 'callcenter';
     state.currentBranch = state.currentBranch || 'all';
-    navList.innerHTML = [ navBtn('callcenter',TT('متابعة الزبائن','Customer follow-up'),'phone',ccQueue('due').length + ccQueue('notify').length + ccQueue('quote').length) ].join('');
+    navList.innerHTML = [ navBtn('callcenter',TT('متابعة الزبائن','Customer follow-up'),'phone',ccNavCount()) ].join('');
   }else if(authRole==='admin'){
     navList.innerHTML = [
       navBtn('dashboard',T('navDashboard'),'dashboard',approvalsTotal()),
@@ -1516,7 +1516,7 @@ function renderInner(){
       navBtn('transfers',T('navTransfers'),'transfer',pendingIncomingTransfers),
       navBtn('invoices',T('navInvoices'),'invoices'),
       navBtn('accounts',TT('الحسابات','Accounts'),'receipt',(state.expenses||[]).filter(e=>e.st==='pending').length + (state.cashCloses||[]).filter(c=>c.st==='submitted').length + (state.repairs||[]).filter(r=>r.debtReq).length),
-      navBtn('callcenter',T('navCallCenter'),'phone',ccQueue('due').length + ccQueue('notify').length + ccQueue('quote').length),
+      navBtn('callcenter',T('navCallCenter'),'phone',ccNavCount()),
       navBtn('reports',T('navReports'),'reports'),
       navBtn('defects',TT('العاطل والتفكيك','Defective & teardown'),'box',defNavCount()),
       navBtn('claims',TT('مطالبات الضمان','Warranty claims'),'receipt',claimRows().filter(x=>!x.r.claimStatus).length),
@@ -4179,6 +4179,8 @@ function ccLabel(o){ return o ? (lang==='ar'?o.ar:o.en) : ''; }
 function ccLastCall(r){ const c = r.calls||[]; return c.length ? c[c.length-1] : null; }
 function ccNotifiedSince(r){ const since = new Date(stageSince(r)).getTime(); return (r.calls||[]).some(c=>c.result==='notified' && new Date(c.at).getTime()>=since-60000); }
 function ccQueue(kind){ if(kind==='all') return ccQueueBase('all'); const set = new Set(ccQueueBase(kind)); return ccQueueBase('all').filter(r=>!r.ccClosed && set.has(r)).sort((a,b)=>new Date(a.ccNextAt||a.createdAt)-new Date(b.ccNextAt||b.createdAt)); }
+// the call-centre menu badge: every job in the action lists (each job counted once); «after delivery» follow-up is not counted
+function ccNavCount(){ const s = new Set(); ['due','notify','quote','rejwait','late','pickup'].forEach(k=>ccQueue(k).forEach(r=>s.add(r.id))); return s.size; }
 function ccQueueBase(kind){
   const all = state.repairs||[]; const now = Date.now(), day = 864e5;
   const open = all.filter(r=>!isClosedStatus(r.status));
