@@ -1516,7 +1516,7 @@ function renderInner(){
       navBtn('transfers',T('navTransfers'),'transfer',pendingIncomingTransfers),
       navBtn('invoices',T('navInvoices'),'invoices'),
       navBtn('accounts',TT('الحسابات','Accounts'),'receipt',(state.expenses||[]).filter(e=>e.st==='pending').length + (state.cashCloses||[]).filter(c=>c.st==='submitted').length + (state.repairs||[]).filter(r=>r.debtReq).length),
-      navBtn('callcenter',T('navCallCenter'),'phone',readyCount),
+      navBtn('callcenter',T('navCallCenter'),'phone',ccQueue('due').length + ccQueue('notify').length + ccQueue('quote').length),
       navBtn('reports',T('navReports'),'reports'),
       navBtn('defects',TT('العاطل والتفكيك','Defective & teardown'),'box',defNavCount()),
       navBtn('claims',TT('مطالبات الضمان','Warranty claims'),'receipt',claimRows().filter(x=>!x.r.claimStatus).length),
